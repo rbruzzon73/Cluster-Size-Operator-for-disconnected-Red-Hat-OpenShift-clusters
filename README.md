@@ -1,4 +1,4 @@
-# The final audited CSV file can be passed out of the isolated zone via a unidirectional hardware data diode or a secure media transfer procedure, guaranteeing strict one-way data movement without allowing any inbound network access.
+# Custer Size Operator for disconnected Red Hat OpenShift Clusters.
 
 - The Cluster Size Operator for disconnecteed Red Hat OpenShift Cluster is a highly specialized, lightweight day-2 utility designed for automated infrastructure auditing and subscription compliance management. 
 
@@ -51,7 +51,53 @@
    └────────────────────────────────────────────────────────┘
    ~~~
 
-- The operator uses a standard Kubernetes Secret (clustersize-secrets) and a Custom Resource definition to control execution. 
+- The execution lifecycle and infrastructure state are driven by two distinct logical components:
+
+   - ClusterSizeConfig Custom Resource (CR): 
+   
+      - Acts as the central, persistent configuration registry (defining parameters like remoteIp, remoteUdpPort, and checkInterval). 
+      
+      - Because the configuration is stored as an independent Custom Resource instance, its operational parameters remain preserved in the cluster etc.d data store even if the operator controller deployment itself is completely uninstalled.
+
+         ~~~ 
+         # oc explain ClusterSizeConfig.spec
+         GROUP:      management.example.com
+         KIND:       ClusterSizeConfig
+         VERSION:    v1alpha1
+  
+         FIELD: spec <Object>
+   
+         DESCRIPTION:
+            ClusterSizeConfigSpec defines the desired state of ClusterSizeConfig
+         FIELDS:
+         check_interval	<string> -required-
+           CheckInterval defines how frequently the operator re-evaluates cluster
+           metrics and ships UDP payloads (e.g., "30s", "5m").
+         
+         log_max_rotations	<integer>
+           LogMaxRotations sets the maximum number of historical backup log archive
+           files to retain.
+          
+         log_max_size_bytes	<integer>
+           LogMaxSizeCcBytes defines the hard file-size cap (in bytes) before
+           triggering a rotation split.
+         
+         remote_ip	<string> -required-
+           RemoteIp specifies the target destination IPv4 address of the remote VM
+           telemetry collector receiver.
+        
+         remote_udp_port	<integer> -required-
+           RemoteUdpPort specifies the destination network UDP socket port on the
+           remote VM receiver listening for payload streams.
+      
+        secret	<string> -required-
+          Secret points to the Name of the Corev1 Secret inside the namespace
+          containing the mandatory 'HASH_SALT' cryptographic key.
+   
+        suspend	<boolean>
+          Suspend flips the operational state of the controller loop. When set to
+          true, active collection deployments are completely torn down.
+        ~~~
 
 - While it runs isolated inside its own namespace, it holds read-only cluster-level access to query raw node objects and cluster-version manifests.
 
@@ -79,10 +125,11 @@
       
          - The fragmentation engine prefixes each raw binary network chunk with a text envelope containing the sequence ID, the current frame index, and the total expected frames for that snapshot window.
 
-
+      <br>
+      
       ~~~
       [Sequence_Number],[Current_Frame],[Total_Frames]|
-      Example: 000000000458,000001,000002| followed by the compressed payload block.
+      [Example: 000000000458,000001,000002| followed by the compressed payload block.
       ~~~
 
 ### Telemetry String Structure
