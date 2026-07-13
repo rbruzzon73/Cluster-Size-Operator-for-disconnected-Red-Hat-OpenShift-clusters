@@ -36,7 +36,7 @@
    ┌────────────────────────────────────────────────────────┐
    │               CLUSTERSIZE OPERATOR                     │
    │  - Watches for 'clustersize-secrets'                   │
-   │  - Dynamically injects ClusterRoles & Bindings         │
+   │  - Dynamically injects Roles ClusterRoles & Bindings   │
    │  - Provisions local storage PVC & ConfigMap            │
    │  - Spawns the Metric Collector Pod                     │
    └────────────────────────────────────────────────────────┘
