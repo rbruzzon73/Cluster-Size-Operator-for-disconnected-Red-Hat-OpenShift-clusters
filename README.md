@@ -310,6 +310,82 @@ The baseline topology is structured as:
    - The receiver processes incoming frames in memory, decompresses the payload, and validates the cryptographic HMAC-SHA256 signature appended to the end of the text stream. 
    - If even a single bit is altered in transit, either the Gzip checksum fails or the HMAC verification breaks, prompting the receiver to drop the corrupted payload immediately.
 
+   - Salts secret definition for telemetry_receiver.py
+
+      - The telemetry_receiver.py script uses HMAC-SHA256 to verify payload integrity.
+      - To avoid exposing the plain-text verification salt or its decryption password in the process list (ps aux), the salt is encrypted on disk and decrypted in-memory at startup.
+
+         - Run these commands as root in the collector node to configure the decryption key and encrypt your HMAC salt.
+
+         - Point Of Attention: Do not include leading or trailing spaces inside the quotation marks (e.g., use "MyPassword", not " MyPassword "), otherwise the spaces will become part of your cryptographic keys.
+         
+            ~~~
+            # Step 1: Write the decryption password to a highly restricted keyfile
+            echo -n "MyDecryptionPassword" | sudo tee /etc/.telemetry_key > /dev/null
+
+            # Step 2: Lock down permissions (Read-only by root)
+            sudo chmod 400 /etc/.telemetry_key
+            sudo chown root:root /etc/.telemetry_key
+            
+            # Step 3: Encrypt the actual HMAC salt value using the keyfile
+            echo -n "MySecretSaltValue" | sudo openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -salt -pass file:/etc/.telemetry_key -out /etc/telemetry_salt.enc
+            ~~~
+
+         - The full path to the .telemetry_key and telemetry_salt.enc can be modified in the telemetry_receiver.py
+
+            ~~~
+            SALT_FILE_PATH = "/etc/telemetry_salt.enc"
+            KEY_FILE_PATH = "/etc/.telemetry_key"
+            ~~~
+
+         - You can verify that the decryption works seamlessly without prompting for a password by running this command.
+   
+            ~~~
+            # Remember to update the file paths used in the example below if you deploy them in different locations.
+            sudo openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass file:/etc/.telemetry_key -in /etc/telemetry_salt.enc
+            ~~~
+
+       - Salts secret definition in the openshift-size-monitoring project of Red Hat OpenShift Cluster:
+
+          -  To create the secret in OpenShift (OCP), you can use either the command-line interface (oc CLI) or a YAML manifest file.
+
+             - Using the oc CLI commands
+
+                ~~~
+                oc create secret generic clustersize-secrets \
+                --namespace=openshift-size-monitoring \
+                --from-literal=HASH_SALT="MySecretSaltValue"
+                ~~~
+
+             - Using a YAML Manifest:
+             
+                -  Encode the salt using printf
+
+                   ~~~
+                   printf "MySecretSaltValue" | base64
+
+                   # Output: TXlTZWNyZXRTYWx0VmFsdWU=
+                   ~~~
+
+                - Create the secret manifest file
+
+                   ~~~
+                   apiVersion: v1
+                   kind: Secret
+                   metadata:
+                     name: clustersize-secrets
+                     namespace: openshift-size-monitoring
+                   type: Opaque
+                   data:
+                     HASH_SALT: TXlTZWNyZXRTYWx0VmFsdWU=
+                   ~~~
+
+                - Apply the manifest to the cluster
+              
+                   ~~~
+                   oc apply -f clustersize-secret.yaml
+                   ~~~
+               
 Availability (Self-Healing): 
    - Because UDP is a connectionless protocol, it does not guarantee packet delivery. 
    - If a network switch drops a frame packet during heavy network congestion, the central receiver discards the incomplete payload. 
