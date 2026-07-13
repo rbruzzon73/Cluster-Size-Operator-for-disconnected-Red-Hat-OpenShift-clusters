@@ -7,12 +7,14 @@ import time
 import argparse
 import base64
 import re
+import hmac
 import hashlib
+import subprocess
 from datetime import datetime, timezone
 from concurrent.futures import ProcessPoolExecutor
 
 # --- PATCH LEVEL IDENTIFICATION ---
-SCRIPT_VERSION = "2.6.0-full-integrity"
+SCRIPT_VERSION = "2.9.1-hardcoded-paths"
 
 # --- CLI Configuration ---
 parser = argparse.ArgumentParser(description=f"High-Throughput Async UDP Telemetry Receiver Stack - Ver {SCRIPT_VERSION}")
@@ -23,15 +25,46 @@ args = parser.parse_args()
 DISPLAY_CONTENT = args.display.lower() == "true"
 RETENTION_SECONDS = args.retention * 24 * 60 * 60
 
-UDP_IP = "0.0.0.0"
-UDP_PORT = 555
-BUFFER_SIZE = 65535
+# --- HARDCODED SECURITY PATHS ---
+SALT_FILE_PATH = "/etc/telemetry_salt.enc"
+KEY_FILE_PATH = "/etc/.telemetry_key"
 OUTPUT_DIR = "/var/log/telemetry_report"
 
 CLUSTER_ID_PATTERN = re.compile(r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b')
 
 # Ensure system log directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# --- SECURE DECRYPTION FUNCTION ---
+def load_encrypted_salt(salt_file, key_file):
+    """Decrypts the salt file in-memory using a password read from a secure key file."""
+    if not os.path.exists(salt_file):
+        raise FileNotFoundError(f"Salt file not found at: {salt_file}")
+    if not os.path.exists(key_file):
+        raise FileNotFoundError(f"Decryption key file not found at: {key_file}. Please ensure it is created with permission 400.")
+    
+    cmd = [
+        "openssl", "enc", "-d", "-aes-256-cbc", 
+        "-pbkdf2", "-iter", "100000", 
+        "-in", salt_file, 
+        "-pass", f"file:{key_file}"
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, check=True)
+        decrypted_salt = result.stdout
+        if not decrypted_salt:
+            raise ValueError("Decrypted salt value is empty.")
+        return decrypted_salt
+    except subprocess.CalledProcessError as e:
+        print(f"[✗] OpenSSL Decryption Failed: {e.stderr.decode().strip()}")
+        raise SystemExit("Error: Key file mismatch or corrupted encrypted salt file.")
+
+# Securely load the salt into memory on start
+try:
+    HMAC_SALT = load_encrypted_salt(SALT_FILE_PATH, KEY_FILE_PATH)
+except Exception as err:
+    print(f"[✗] Initialization failure: {err}")
+    raise SystemExit(1)
 
 # --- METRICS RESTORATION & DECODING FUNCTIONS ---
 def decode_epoch(epoch_str):
@@ -62,19 +95,16 @@ def extract_lookup_table(r_line):
         pass
     return mapping_table
 
-def process_completed_message(msg_id, source_ip, frames, total_frames, display_content):
-    """Asynchronous worker function: validates signature against raw H, N, and R lines, maps indices, and logs output."""
+def process_completed_message(msg_id, source_ip, frames, total_frames, display_content, salt_bytes):
+    """Asynchronous worker function: validates signature against raw components using HMAC, maps indices, and logs output."""
     try:
-        # 1. Atomic byte reconstruction of the segmented Gzip payload
         complete_gzip_payload = b"".join(frames[i] for i in range(1, total_frames + 1))
 
-        # 2. Decompression execution
         with gzip.GzipFile(fileobj=io.BytesIO(complete_gzip_payload)) as f:
             raw_text = f.read().decode('utf-8')
         
         raw_lines = raw_text.strip().split('\n')
         
-        # 3. Extract validation lines (Everything except the T line itself)
         protected_lines = []
         t_line = None
         for line in raw_lines:
@@ -83,33 +113,31 @@ def process_completed_message(msg_id, source_ip, frames, total_frames, display_c
             elif line.startswith("H,") or line.startswith("N,") or line.startswith("R,"):
                 protected_lines.append(line)
 
-        # 4. Perform Full SHA-256 Integrity Validation (H + N + R Included)
         integrity_status = "VERIFIED"
-        calculated_hash = ""
-        expected_hash = ""
+        calculated_mac = ""
+        expected_mac = ""
 
         if not t_line:
             integrity_status = "FAILED - MISSING SIGNATURE"
         else:
             try:
-                # Reconstruct full block text exactly as it was generated before compression
                 hash_input = "\n".join(protected_lines) + "\n"
-                calculated_hash = hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
-                expected_hash = t_line.split(',', 1)[1].strip()
                 
-                if calculated_hash != expected_hash:
+                hmac_obj = hmac.new(salt_bytes, hash_input.encode('utf-8'), hashlib.sha256)
+                calculated_mac = hmac_obj.hexdigest()
+                expected_mac = t_line.split(',', 1)[1].strip()
+                
+                if calculated_mac != expected_mac:
                     integrity_status = "FAILED - TAMPERED/CORRUPTED"
             except Exception:
                 integrity_status = "FAILED - VALIDATION ERROR"
 
-        # 5. Pre-extract the translation dictionary (R line mapping)
         lookup_table = {}
         for line in protected_lines:
             if line.startswith("R,"):
                 lookup_table = extract_lookup_table(line)
                 break
 
-        # 6. Metric conversion and string restoration (Done on raw lines for human display/logs)
         processed_lines = []
         for line in raw_lines:  
             if line.startswith("H,"):
@@ -133,24 +161,21 @@ def process_completed_message(msg_id, source_ip, frames, total_frames, display_c
             else:
                 processed_lines.append(line)
 
-        # 7. Build Dynamic Audit Header embedding the validation status
         if integrity_status == "VERIFIED":
             audit_header = f"# [AUDIT] MSG {msg_id} from {source_ip} ({total_frames} frames) [INTEGRITY: OK]"
             print(f"[✓] Successfully processed MSG {msg_id} from {source_ip} (Integrity: OK)")
         else:
-            audit_header = f"# [⚠️ CRITICAL INTEGRITY FAILURE] MSG {msg_id} from {source_ip} ({total_frames} frames) - STATUS: {integrity_status}\n# [DEBUG] Expected: {expected_hash}\n# [DEBUG] Calculated: {calculated_hash}"
+            audit_header = f"# [⚠️ CRITICAL INTEGRITY FAILURE] MSG {msg_id} from {source_ip} ({total_frames} frames) - STATUS: {integrity_status}\n# [DEBUG] Expected HMAC: {expected_mac}\n# [DEBUG] Calculated HMAC: {calculated_mac}"
             print(f"[✗] ALERT: MSG {msg_id} from {source_ip} failed validation! Status: {integrity_status}")
 
         final_report = audit_header + "\n" + "\n".join(processed_lines)
         
-        # 8. Append telemetry metrics to system daily log file
         current_day = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         output_file = os.path.join(OUTPUT_DIR, f"telemetry_{current_day}.log")
         
         with open(output_file, "a", encoding="utf-8") as out:
             out.write(final_report + "\n\n")
 
-        # 9. Extract and store unique Cluster IDs from raw text
         discovered_ids = set(CLUSTER_ID_PATTERN.findall(raw_text))
         if discovered_ids:
             cid_file = os.path.join(OUTPUT_DIR, f"cluster_ids_{current_day}.log")
@@ -195,7 +220,7 @@ def run_retention_cleanup():
 
 def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((UDP_IP, UDP_PORT))
+    sock.bind(("0.0.0.0", 555))
 
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024 * 1024 * 32)
@@ -203,8 +228,9 @@ def main():
     except Exception as e:
         print(f"[!] Warning: Unable to set peak SO_RCVBUF size (insufficient privileges?): {e}")
 
-    print(f"[*] Async High-Throughput Server ready on UDP port {UDP_PORT}. Patch Level: {SCRIPT_VERSION}")
+    print(f"[*] Async High-Throughput Server ready on UDP port 555. Patch Level: {SCRIPT_VERSION}")
     print(f"[*] Absolute daily log reports storage path: {OUTPUT_DIR}")
+    print(f"[*] Securely decrypted HMAC Verification Salt from '{SALT_FILE_PATH}' using key '{KEY_FILE_PATH}'")
     print("-" * 75)
 
     assembly_buffer = {}
@@ -213,7 +239,7 @@ def main():
     with ProcessPoolExecutor() as executor:
         while True:
             try:
-                data, addr = sock.recvfrom(BUFFER_SIZE)
+                data, addr = sock.recvfrom(65535)
                 source_ip = addr[0]
 
                 if b'|' not in data:
@@ -244,7 +270,8 @@ def main():
                         source_ip,
                         assembly_buffer[msg_id]["frames"],
                         total_frames,
-                        DISPLAY_CONTENT
+                        DISPLAY_CONTENT,
+                        HMAC_SALT
                     )
                     del assembly_buffer[msg_id]
 

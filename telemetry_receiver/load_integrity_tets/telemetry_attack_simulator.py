@@ -2,16 +2,45 @@
 import socket
 import gzip
 import io
+import os
 import uuid
 import random
 import struct
 import time
 import base64
+import hmac
 import hashlib
+import subprocess
 
 # --- Target Configuration ---
 TARGET_IP = "192.168.100.254"
 TARGET_PORT = 555
+
+# --- Security Configuration (Aligned with production receiver paths) ---
+SALT_FILE_PATH = "/etc/telemetry_salt.enc"
+KEY_FILE_PATH = "/etc/.telemetry_key"
+
+def load_verification_salt(salt_file, key_file):
+    """Decrypts the validation salt in-memory to sign simulated payloads."""
+    if not os.path.exists(salt_file) or not os.path.exists(key_file):
+        print("[!] Warning: Decryption keys not found. Falling back to default static test salt.")
+        return b"MySecretSaltValue"
+    
+    cmd = [
+        "openssl", "enc", "-d", "-aes-256-cbc", 
+        "-pbkdf2", "-iter", "100000", 
+        "-in", salt_file, 
+        "-pass", f"file:{key_file}"
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, check=True)
+        return result.stdout.strip()
+    except Exception as e:
+        print(f"[!] Warning: OpenSSL decryption failed ({e}). Falling back to default static test salt.")
+        return b"MySecretSaltValue"
+
+# Securely load the salt for HMAC signing
+HMAC_SALT = load_verification_salt(SALT_FILE_PATH, KEY_FILE_PATH)
 
 def generate_random_ip():
     return f"{random.randint(10, 220)}.{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}"
@@ -39,8 +68,8 @@ def build_ip_udp_header(src_ip, dst_ip, dst_port, payload_len):
     udp_header = struct.pack('!HHHH', udp_src_port, dst_port, udp_len, udp_check)
     return ip_header + udp_header
 
-def build_corrupted_payload(cluster_id, scenario_idx):
-    """Generates a base payload, signs H + N + R correctly, then mutates the data to break integrity tests."""
+def build_corrupted_payload(cluster_id, scenario_idx, salt_bytes):
+    """Generates a base payload, signs H + N + R using HMAC-SHA256, then mutates the data to break validation."""
     now_epoch = int(time.time())
     node_count = 40  
     
@@ -59,9 +88,10 @@ def build_corrupted_payload(cluster_id, scenario_idx):
         payload_lines.append(f"N,{cluster_id},{i:03d},5,50,true")
     payload_lines.append(f"R,{b64_lookup}")
     
-    # 2. Compute true SHA-256 hash across H, N, and R combined
+    # 2. Compute TRUE HMAC-SHA256 hash across pristine H, N, and R rows combined
     hash_input = "\n".join(payload_lines) + "\n"
-    sha256_hash = hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
+    hmac_obj = hmac.new(salt_bytes, hash_input.encode('utf-8'), hashlib.sha256)
+    hmac_signature = hmac_obj.hexdigest()
     
     # 3. Apply targeted mutations based on scenario indexes
     scenario_desc = ""
@@ -107,10 +137,9 @@ def build_corrupted_payload(cluster_id, scenario_idx):
         
     elif scenario_idx == 11:
         scenario_desc = "CORRUPTING THE H ROW METADATA FIELDS"
-        # Attack the header row directly by zeroing out node size metrics
         payload_lines[0] = payload_lines[0].replace(f",{node_count},", ",CORRUPTED_COUNT,")
 
-    corrupted_payload_text = "\n".join(payload_lines) + "\n" + f"T,{sha256_hash}\n"
+    corrupted_payload_text = "\n".join(payload_lines) + "\n" + f"T,{hmac_signature}\n"
     
     out_io = io.BytesIO()
     with gzip.GzipFile(fileobj=out_io, mode='wb') as f:
@@ -142,14 +171,15 @@ def main():
         return
 
     print(f"[*] Starting target validation sweep across 11 corrupted cluster payloads...")
+    print(f"[*] Decrypted active signing salt from security subsystem.")
     print(f"[*] Shipping packets directly to -> {TARGET_IP}:{TARGET_PORT}\n" + "-"*75)
 
-    # Loop extended to 12 to capture Scenario 11 execution
+    # Loop through all 11 scenarios
     for scenario_idx in range(1, 12):
         cluster_id = str(uuid.uuid4())
         src_ip = generate_random_ip()
         
-        gzip_payload, description = build_corrupted_payload(cluster_id, scenario_idx)
+        gzip_payload, description = build_corrupted_payload(cluster_id, scenario_idx, HMAC_SALT)
         
         print(f"[🔥] Sending Cluster {scenario_idx}/11 | ID: {cluster_id} | Attack Type: {description}")
         send_segmented_payload(s, src_ip, gzip_payload)

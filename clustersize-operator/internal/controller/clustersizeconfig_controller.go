@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,8 +32,39 @@ type ClusterSizeConfigReconciler struct {
 }
 
 const (
-	OperatorVersion = "2.6.0-full-integrity" 
+	OperatorVersion = "2.9.3-dynamic-hmac" 
 )
+
+// parseIntervalToSeconds parses duration strings supporting seconds (s), minutes (m), and hours (h).
+// Examples: "600s" -> 600, "10m" -> 600, "2h" -> 7200. Defaults to 24 hours (86400 seconds) on empty or invalid inputs.
+func parseIntervalToSeconds(intervalStr string) int {
+	intervalStr = strings.TrimSpace(strings.ToLower(intervalStr))
+	if intervalStr == "" {
+		return 86400 // Default to 24 hours
+	}
+
+	re := regexp.MustCompile(`^([0-9]+)([smh])$`)
+	matches := re.FindStringSubmatch(intervalStr)
+	if len(matches) != 3 {
+		return 86400 // Fallback to 24 hours
+	}
+
+	value, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 86400
+	}
+
+	switch matches[2] {
+	case "s":
+		return value
+	case "m":
+		return value * 60
+	case "h":
+		return value * 3600
+	default:
+		return 86400
+	}
+}
 
 // --- REGOLE LOCALI ---
 //+kubebuilder:rbac:groups=management.example.com,resources=clustersizeconfigs,verbs=get;list;watch;create;update;patch;delete,namespace=openshift-size-monitoring
@@ -218,6 +250,7 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 	if maxSizeBytes == 0 { maxSizeBytes = 10485760 }
 	maxRotations := config.Spec.LogMaxRotations
 	if maxRotations == 0 { maxRotations = 5 }
+	intervalSeconds := parseIntervalToSeconds(config.Spec.CheckInterval)
 	payloadHash := fmt.Sprintf("%x", sha256.Sum256([]byte(payload)))
 
 	replicas := int32(1)
@@ -261,8 +294,12 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 									# Form framework chunk containing the live H, specific Node slice, and R
 									{ echo "${HEADER_LINE}"; cat /tmp/chunk_nodes.txt; echo "${ROLE_LINE}"; } > /tmp/frame_content.txt
 									
-									# Calculate signature dynamically across the entire current frame layout (H + N + R)
-									FRAME_HASH=$(sha256sum /tmp/frame_content.txt | awk '{print $1}')
+									# Clean layout to ensure byte consistency for HMAC signing
+									tr -d '\r' < /tmp/frame_content.txt | grep -v '^$' | sed -e 's/[[:space:]]*$//' > /tmp/cleaned_frame_content.txt
+									CLEAN_SALT=$(echo -n "${SECRET_SALT}" | tr -d '\r\n[:space:]')
+									
+									# Calculate HMAC-SHA256 dynamically using key injected from mounted secret env
+									FRAME_HASH=$(openssl dgst -sha256 -hmac "${CLEAN_SALT}" /tmp/cleaned_frame_content.txt | awk '{print $2}')
 									
 									# Finalize layout text report append format
 									{ cat /tmp/frame_content.txt; echo "T,${FRAME_HASH}"; } > /tmp/frame_payload.txt
@@ -295,7 +332,9 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 								
 								if [ ${COUNTER} -ge 999999999999 ]; then COUNTER=0; else COUNTER=$((COUNTER + 1)); fi
 								echo ${COUNTER} > "${SEQ_FILE}"
-								sleep 30
+								
+								# Dynamic execution delay loop sleeping (fallback 24 hours)
+								sleep "${CHECK_INTERVAL_SEC:-86400}"
 							done`,
 						},
 						Env: []corev1.EnvVar{
@@ -303,6 +342,17 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 							{Name: "REMOTE_UDP_PORT", Value: strconv.Itoa(config.Spec.RemoteUdpPort)},
 							{Name: "CFG_MAX_SIZE", Value: strconv.FormatInt(int64(maxSizeBytes), 10)},
 							{Name: "CFG_MAX_ROTS", Value: strconv.Itoa(int(maxRotations))},
+							{Name: "CHECK_INTERVAL_SEC", Value: strconv.Itoa(intervalSeconds)},
+							// Injects HASH_SALT directly into pod environments
+							{
+								Name: "SECRET_SALT",
+								ValueFrom: &corev1.EnvVarSource{
+									SecretKeyRef: &corev1.SecretKeySelector{
+										LocalObjectReference: corev1.LocalObjectReference{Name: config.Spec.Secret},
+										Key:                  "HASH_SALT",
+									},
+								},
+							},
 						},
 						VolumeMounts: []corev1.VolumeMount{{Name: "log-vol", MountPath: "/var/log/container"}, {Name: "payload-vol", MountPath: "/tmp/manifest"}},
 					}},
