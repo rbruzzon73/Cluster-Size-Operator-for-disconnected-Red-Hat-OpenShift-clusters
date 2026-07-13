@@ -139,7 +139,7 @@
    ~~~
    H,[ClusterID],[NodeCount],[VersionIndex],[InitVersionIndex],[InstallDate],None,[CurrentEpoch],[Arch]
    N,[ClusterID],[SequentialIndex],[RoleIndex],[vCPU],[IsBaremetal]
-   R,[Base64_Encoded_Lookup_Table_Mapping_Indices_To_Cleartext_Roles]
+   R,[Base64_Encoded_Lookup_Table_Mapping_Indices_To_Cleartext_Versiosn and Roles]
    T,[HMAC-SHA256_Data_Integrity_Signature]
    ~~~
    
@@ -165,7 +165,7 @@ The baseline topology is structured as:
    | Cluster with 128 nodes | 1047 Bytes (565 + 482 Bytes) | 2 Packets (Frame 1/2, 2/2) |
 
 
-## Network and Security Impact Analysis:
+## Network Impact Analysis:
 
 - Network Footprint: 
    - The standard Ethernet Maximum Transmission Unit (MTU) limit is 1,500 bytes. 
@@ -173,9 +173,137 @@ The baseline topology is structured as:
    - This completely eliminates IP fragmentation risks on the wire, preventing data drops on standard networks. 
    - A full 150-node snapshot burst takes less than a millisecond to transmit and is virtually invisible against normal background datacenter traffic.
 
+## Security Impact Analysis:
+
+- The Cluster Size Operator is configured strictly under the Principle of Least Privilege, 
+- granting only the bare minimum permissions required for its operational lifecycle. 
+- Scope boundaries isolate application workloads locally while exposing cluster-wide assets strictly as read-only streams.
+
+   - Isolated Local Permissions (permissions scope)
+   
+      - All mutating administrative operations (Create, Read, Update, Delete) are locked explicitly inside the operator's dedicated deployment namespace (openshift-size-monitoring). 
+      
+      - The operator has zero capability to alter external application spaces:
+
+         - Custom Resources (clustersizeconfigs, /status, /finalizers): Full state-reconciliation, status reporting, and safe-deletion tracking for the operator's primary interface.
+
+         - Workload Infrastructure (deployments, serviceaccounts): Full lifecycle actions required to spawn, scale, and maintain backend sizing application pods.
+
+         - Operational Controls (configmaps, persistentvolumeclaims, secrets): Storage management, configuration ingestion, and local credential manipulation confined entirely to the operator's namespace.
+
+         - High-Availability & Audit (leases, events): Required exclusively for coordination blocks (leader election) and publishing contextual warning/info alerts directly into the cluster logging stream.
+       
+      ~~~
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - persistentvolumeclaims
+          - serviceaccounts
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - management.example.com
+          resources:
+          - clustersizeconfigs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - management.example.com
+          resources:
+          - clustersizeconfigs/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - management.example.com
+          resources:
+          - clustersizeconfigs/status
+          verbs:
+          - get
+          - patch
+          - update
+        serviceAccountName: clustersize-controller-manager
+      ~~~      
+
+   - Read-Only Global Context (clusterPermissions scope)
+
+      - To correctly size target infrastructures, the operator evaluates cluster topology using non-mutating, cluster-wide read queries (get, list, watch). 
+      - No creation, modification, or deletion rights exist at the cluster layer:
+
+         - Cluster Metadata (nodes): Read-only visibility into node capacity and structural topology to compute structural calculations.
+
+         - Platform Engine (clusterversions): Read-only verification of OpenShift target architecture layers.
+
+      ~~~
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - clusterversions
+          verbs:
+          - get
+          - list
+          - watch
+      ~~~
+
 - Confidentiality (High): 
-   - Real node hostnames are never transmitted; they are masked using sequential index tags (node-001, node-002). 
-   - The underlying structural role mappings are obscured inside a Base64 string payload row. 
+   - Real node hostnames are not transmitted; instead, they are anonymized using sequential index identifiers (e.g., 001, 002, reconstructed as node-001, node-002).
+   - The underlying structural role mappings and versions are obscured inside a Base64 string payload row. 
    - Even if a network tap captures the packets, an attacker only sees an anonymous binary stream with zero internal infrastructure nomenclature.
 
 - Integrity Verification: The receiver processes incoming frames in memory, decompresses the payload, and validates the cryptographic HMAC-SHA256 signature appended to the end of the text stream. If a single bit is modified in transit, the Gzip checksum fails or the HMAC verification breaks, causing the receiver to drop the corrupted payload immediately.
