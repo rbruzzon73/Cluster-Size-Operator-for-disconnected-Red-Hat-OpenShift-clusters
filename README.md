@@ -306,7 +306,9 @@ The baseline topology is structured as:
    - The underlying structural role mappings and versions are obscured inside a Base64 string payload row. 
    - Even if a network tap captures the packets, an attacker only sees an anonymous binary stream with zero internal infrastructure nomenclature.
 
-- Integrity Verification: The receiver processes incoming frames in memory, decompresses the payload, and validates the cryptographic HMAC-SHA256 signature appended to the end of the text stream. If a single bit is modified in transit, the Gzip checksum fails or the HMAC verification breaks, causing the receiver to drop the corrupted payload immediately.
+- Integrity Verification: 
+   - The receiver processes incoming frames in memory, decompresses the payload, and validates the cryptographic HMAC-SHA256 signature appended to the end of the text stream. 
+   - If even a single bit is altered in transit, either the Gzip checksum fails or the HMAC verification breaks, prompting the receiver to drop the corrupted payload immediately.
 
 Availability (Self-Healing): 
    - Because UDP is a connectionless protocol, it does not guarantee packet delivery. 
@@ -318,7 +320,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
 - Centralize Aggregation (The Secure Internal Ingestion Hub):
 
-   - Deploy a single central Linux Bastion or dedicated Virtual Machine within your secure disconnected zone. This host runs a multi-threaded UDP receiver script that listens for incoming payloads from all your clusters.
+   - Deploy a single central Linux Bastion or dedicated Virtual Machine within your secure disconnected zone. This host runs a multi-threaded Python UDP receiver script (telemetry_receiver.py) that listens for incoming payload frames from all clusters.
 
       ~~~
       ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
@@ -329,8 +331,8 @@ When operating multiple disconnected clusters across an enterprise, managing dis
                                ▼        ▼        ▼
                          ┌──────────────────────────────┐
                          │     CENTRAL BASTION HUB      │
-                         │  - Multi-threaded UDP server │
-                         │  - Separates files by UUID   │
+                         │ - Multi-threaded UDP server  │
+                         │ - Reassembles frames in-mem  │ 
                          └──────────────┬───────────────┘
                                         │
                                         ▼
@@ -341,23 +343,21 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       ~~~
 
 - Centralized Aggregation & Reassembly:
-  
-   - Deploy a central Linux Bastion host or virtual machine within your secure isolated network zone.
-  
-   - This host runs a multi-threaded Python UDP receiver daemon that listens on port 555.
-   
-   - The daemon evaluates incoming frames against their Sequence Number in memory using a buffer_lock mutex session map.
-   
-   - When all expected frames for a specific Msg ID arrive, it pops the session, decompresses the unified byte-stream, and appends the cleartext metrics into dedicated logs:
+
+   - This host runs telemetry_receiver.py as a systemd daemon listening on an unprivileged port (e.g., UDP 5555).
+
+   - The daemon evaluates incoming fragmented frames against their unique Message ID in memory using a thread-safe session map to prevent race conditions.
+
+   - Once all expected frames for a specific payload arrive, the daemon terminates the session context, decompresses the unified byte-stream, validates the HMAC-SHA256 signature, and appends the raw cleartext metrics into a central daily rolling log:
 
       ~~~
       /var/log/telemetry_report/
-      ├── telemetry_2026-07-12.log (Consolidated rolling daily logs)
+      └── telemetry_2026-07-12.log (Consolidated multi-cluster daily log)
       ~~~
       
-- Automated Consolidation: 
+- Automated Consolidation: (Pending Implementation)
 
-   - A simple cron job on the aggregation hub can parse the daily rolling file, extract the latest valid timestamp entry for each unique cluster ID, and compile a single, unified CSV master compliance file:
+   - A scheduled cron job parses the daily rolling log, deduplicates the entries by extracting the latest valid timestamp for each unique Cluster_ID, and compiles a single, unified CSV master compliance file:
 
       ~~~
       Cluster_ID,Masked_Node,Role,CPU,IsBaremetal
@@ -367,4 +367,4 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       ~~~
       
 ## Data Diode or Secure Media Transfer: 
-The final audited CSV file can be passed out of the isolated zone via a unidirectional hardware data diode or a secure media transfer procedure, guaranteeing strict one-way data movement without allowing any inbound network access.
+   - The finalized CSV compliance report is then transferred out of the isolated zone via a unidirectional hardware data diode or a secure media transfer protocol, guaranteeing strict one-way data movement without allowing inbound network access.
