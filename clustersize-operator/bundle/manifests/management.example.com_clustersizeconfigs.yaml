@@ -1,0 +1,98 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.2
+  creationTimestamp: null
+  name: clustersizeconfigs.management.example.com
+spec:
+  group: management.example.com
+  names:
+    kind: ClusterSizeConfig
+    listKind: ClusterSizeConfigList
+    plural: clustersizeconfigs
+    singular: clustersizeconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterSizeConfigSpec defines the desired state of ClusterSizeConfig
+            properties:
+              check_interval:
+                description: CheckInterval defines how frequently the operator re-evaluates
+                  cluster metrics and ships UDP payloads (e.g., "30s", "5m").
+                type: string
+              log_max_rotations:
+                default: 10
+                description: LogMaxRotations sets the maximum number of historical
+                  backup log archive files to retain.
+                type: integer
+              log_max_size_bytes:
+                default: 50000
+                description: LogMaxSizeCcBytes defines the hard file-size cap (in
+                  bytes) before triggering a rotation split.
+                type: integer
+              remote_ip:
+                description: RemoteIp specifies the target destination IPv4 address
+                  of the remote VM telemetry collector receiver.
+                type: string
+              remote_udp_port:
+                description: RemoteUdpPort specifies the destination network UDP socket
+                  port on the remote VM receiver listening for payload streams.
+                type: integer
+              secret:
+                description: Secret points to the Name of the Corev1 Secret inside
+                  the namespace containing the mandatory 'HASH_SALT' cryptographic
+                  key.
+                type: string
+              suspend:
+                description: Suspend flips the operational state of the controller
+                  loop. When set to true, active collection deployments are completely
+                  torn down.
+                type: boolean
+            required:
+            - check_interval
+            - remote_ip
+            - remote_udp_port
+            - secret
+            type: object
+          status:
+            properties:
+              monitoringActive:
+                type: boolean
+              phase:
+                type: string
+            required:
+            - monitoringActive
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

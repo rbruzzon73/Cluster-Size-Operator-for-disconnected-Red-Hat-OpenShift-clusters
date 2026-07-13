@@ -1,0 +1,42 @@
+---
+schema: olm.package
+name: clustersize
+defaultChannel: test-channel
+icon:
+  base64data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48ZGVmcz48c3R5bGU+LmJnIHtmaWxsOiNDQzAwMDA7fS5saWdodCB7ZmlsbDojRUZFRkVGO30udGV4dC1yZWQge2ZpbGw6I0NDMDAwMDtmb250LWZhbWlseTonUmVkSGF0VGV4dCcsJ1NlZ29lIFVJJyxBcmlhbCxzYW5zLXNlcmlmO2ZvbnQtd2VpZ2h0OjkwMDtmb250LXNpemU6MjJweDt0ZXh0LWFuY2hvcjptaWRkbGU7ZG9taW5hbnQtYmFzZWxpbmU6Y2VudHJhbDt9LnN0cm9rZS1saW5lY2FwOnJvdW5kO3N0cm9rZS13aWR0aDozO3N0cm9rZTojRUZFRkVGO308L3N0eWxlPjwvZGVmcz48Y2lyY2xlIGNsYXNzPSJiZyIgY3g9IjUwIiBjeT0iNTAiIHI9IjUwIi8+PHJlY3QgY2xhc3M9ImxpZ2h0IiB4PSIzMCIgeT0iMzAiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcng9IjQiLz48dGV4dCBjbGFzcz0idGV4dC1yZWQiIHg9IjUwIiB5PSI1MCI+Ukg8L3RleHQ+PHBhdGggY2xhc3M9InN0cm9rZS1saW5lY2FwIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZT0iI0VGRUZFRiIgZD0iTTI1LDMwIEwxNSwyMCBMMjIsMjAgTTMwLDI1IEwyMCwxNSBMMjAsMjMiLz48cGF0aCBjbGFzcz0ic3Ryb2tlLWxpbmVjYXAiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlPSIjRUZFRkVGIiBkPSJNNzUsMzAgTDg1LDIwIEw3NywyMCBNNzAsMjUgTDgwLDE1IEwyMCwyMyIvPjxwYXRoIGNsYXNzPSJzdHJva2UtbGluZWNhcCIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2U9IiNFRkVGRUYiIGQ9Ik0yNSw3MCBMMTUsODAgTDIzLDgwIE0zMCw3NSBMMjAsODUgTDIwLDc3Ii8+PHBhdGggY2xhc3M9InN0cm9rZS1saW5lY2FwIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZT0iI0VGRUZFRiIgZD0iTTc1LDcwIEw4NSw4MCBMMzAsODAgTTcwLDc1IEw4MCw4NSBMMDAsNzciLz48L3N2Zz4=
+  mediatype: image/svg+xml
+---
+schema: olm.channel
+package: clustersize
+name: test-channel
+entries:
+  - name: clustersize.v2.0.76
+---
+schema: olm.bundle
+name: clustersize.v2.0.76
+package: clustersize
+image: ghcr.io/rbruzzon73/clustersize-bundle:v2.0.76
+properties:
+  - type: olm.package
+    value:
+      packageName: clustersize
+      version: 2.0.76
+  - type: olm.arch
+    value:
+      amd64: true
+  - type: olm.csv.metadata
+    value:
+      description: "Cluster Size Operator utility to monitor and scale cluster infrastructure resources."
+      displayName: "Cluster Size Operator"
+      version: 2.0.76
+      provider:
+        name: "Custom Utilities"
+      installModes:
+        - type: OwnNamespace
+          supported: true
+        - type: SingleNamespace
+          supported: true
+        - type: MultiNamespace
+          supported: false
+        - type: AllNamespaces
+          supported: true

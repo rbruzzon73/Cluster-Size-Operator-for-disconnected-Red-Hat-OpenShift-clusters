@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- management_v1alpha1_clustersizeconfig.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
