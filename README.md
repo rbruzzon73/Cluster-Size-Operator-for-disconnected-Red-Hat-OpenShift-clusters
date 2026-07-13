@@ -354,7 +354,8 @@ The baseline topology is structured as:
                 ~~~
                 oc create secret generic clustersize-secrets \
                 --namespace=openshift-size-monitoring \
-                --from-literal=HASH_SALT="MySecretSaltValue"
+                --from-literal=HASH_SALT="MySecretSaltValue" \
+                --dry-run=client -o yaml | oc apply -f -
                 ~~~
 
              - Using a YAML Manifest:
