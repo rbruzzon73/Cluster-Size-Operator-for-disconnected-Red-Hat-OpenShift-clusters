@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
@@ -32,10 +31,10 @@ type ClusterSizeConfigReconciler struct {
 }
 
 const (
-	OperatorVersion = "2.0.76" 
+	OperatorVersion = "2.6.0-full-integrity" 
 )
 
-// --- REGOLE LOCALI (Genereranno un Role locale e popoleranno la sezione "permissions:") ---
+// --- REGOLE LOCALI ---
 //+kubebuilder:rbac:groups=management.example.com,resources=clustersizeconfigs,verbs=get;list;watch;create;update;patch;delete,namespace=openshift-size-monitoring
 //+kubebuilder:rbac:groups=management.example.com,resources=clustersizeconfigs/status,verbs=get;update;patch,namespace=openshift-size-monitoring
 //+kubebuilder:rbac:groups=management.example.com,resources=clustersizeconfigs/finalizers,verbs=update,namespace=openshift-size-monitoring
@@ -45,7 +44,7 @@ const (
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch,namespace=openshift-size-monitoring
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete,namespace=openshift-size-monitoring
 
-// --- REGOLE GLOBALI (Genereranno un ClusterRole e popoleranno "clusterPermissions:") ---
+// --- REGOLE GLOBALI ---
 //+kubebuilder:rbac:groups=config.openshift.io,resources=clusterversions,verbs=get;list;watch
 
 func (r *ClusterSizeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -66,20 +65,9 @@ func (r *ClusterSizeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return r.teardownWorkloads(ctx, config.Namespace)
 	}
 
-	secret := &corev1.Secret{}
-	secretKey := client.ObjectKey{Name: config.Spec.Secret, Namespace: config.Namespace}
-	if err := r.Get(ctx, secretKey, secret); err != nil {
-		logger.Error(err, "Failed to retrieve tracking HASH_SALT secret", "namespace", config.Namespace)
-		return ctrl.Result{}, err
-	}
-	saltBytes := secret.Data["HASH_SALT"]
-	if len(saltBytes) == 0 {
-		saltBytes = []byte("SuperSecretSaltValue")
-	}
-
 	logger.Info("ClusterSizeConfig trigger detected active. Evaluating telemetry matrices...")
 	
-	payload, err := r.compileTelemetryPayload(ctx, string(saltBytes))
+	payload, err := r.compileTelemetryBasePayload(ctx)
 	if err != nil {
 		logger.Error(err, "Failed payload compilation execution sequence")
 		return ctrl.Result{}, err
@@ -88,7 +76,7 @@ func (r *ClusterSizeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	return r.deployWorkloads(ctx, config, payload)
 }
 
-func (r *ClusterSizeConfigReconciler) compileTelemetryPayload(ctx context.Context, salt string) (string, error) {
+func (r *ClusterSizeConfigReconciler) compileTelemetryBasePayload(ctx context.Context) (string, error) {
 	logger := log.FromContext(ctx)
 	clusterID, currentVer, initialVer := "unknown", "unknown", "unknown"
 	var initDateEpoch int64 = 0
@@ -173,17 +161,13 @@ func (r *ClusterSizeConfigReconciler) compileTelemetryPayload(ctx context.Contex
 	rEncrypted := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("R,%s", strings.Join(rMappings, ","))))
 	lines = append(lines, fmt.Sprintf("R,%s", rEncrypted))
 
-	payloadBody := strings.Join(lines, "\n") + "\n"
-	mac := hmac.New(sha256.New, []byte(salt))
-	mac.Write([]byte(payloadBody))
-	return fmt.Sprintf("%sT,%s\n", payloadBody, fmt.Sprintf("%x", mac.Sum(nil))), nil
+	return strings.Join(lines, "\n") + "\n", nil
 }
 
 func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, config *managementv1alpha1.ClusterSizeConfig, payload string) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	var finalOwnerReferences []metav1.OwnerReference
 
-	// Recupera il Deployment del manager OLM per copiarne l'OwnerReference (la CSV)
 	managerDep := &appsv1.Deployment{}
 	if err := r.Get(ctx, client.ObjectKey{Name: "controller-manager", Namespace: config.Namespace}, managerDep); err == nil {
 		if len(managerDep.GetOwnerReferences()) > 0 {
@@ -192,7 +176,6 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 		}
 	}
 
-	// Fallback sulla CR se eseguito al di fuori di OLM o errore intercettazione
 	if len(finalOwnerReferences) == 0 {
 		finalOwnerReferences = []metav1.OwnerReference{
 			{
@@ -252,7 +235,7 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 					ServiceAccountName: "clustersize-sa",
 					Containers: []corev1.Container{{
 						Name:    "collector",
-						Image:    "registry.redhat.io/openshift4/ose-cli:latest",
+						Image:   "registry.redhat.io/openshift4/ose-cli:latest",
 						Command: []string{"/bin/bash", "-c"},
 						Args: []string{
 							`LOG_FILE="/var/log/container/clustersize"
@@ -260,41 +243,58 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 							if [ -f "${SEQ_FILE}" ]; then COUNTER=$(cat "${SEQ_FILE}"); else COUNTER=0; fi
 							while true; do
 								LIVE_EPOCH=$(date +%s)
-								sed "s/__CURRENT_EPOCH_TOKEN__/${LIVE_EPOCH}/g" /tmp/manifest/payload.txt > /tmp/live_payload.txt
-								if [ -f "${LOG_FILE}" ]; then
-									CURRENT_SIZE=$(stat -c%s "${LOG_FILE}" 2>/dev/null || echo 0)
-									if [ ${CURRENT_SIZE} -ge ${CFG_MAX_SIZE} ]; then
-										rm -f "${LOG_FILE}.${CFG_MAX_ROTS}"
-										for ((i=CFG_MAX_ROTS-1; i>=1; i--)); do
-											if [ -f "${LOG_FILE}.${i}" ]; then mv "${LOG_FILE}.${i}" "${LOG_FILE}.$((i+1))"; fi
-										done
-										mv "${LOG_FILE}" "${LOG_FILE}.1" && touch "${LOG_FILE}"
-									fi
-								fi
-								cat /tmp/live_payload.txt >> "${LOG_FILE}"
-								MSG_ID=$(printf "%012d" ${COUNTER})
-								if [ ${COUNTER} -ge 999999999999 ]; then COUNTER=0; else COUNTER=$((COUNTER + 1)); fi
-								echo ${COUNTER} > "${SEQ_FILE}"
-								HEADER_LINE=$(grep "^H," /tmp/live_payload.txt)
-								ROLE_LINE=$(grep "^R," /tmp/live_payload.txt)
-								TRAILER_LINE=$(grep "^T," /tmp/live_payload.txt)
-								grep "^N," /tmp/live_payload.txt > /tmp/nodes_only.txt
+								sed "s/__CURRENT_EPOCH_TOKEN__/${LIVE_EPOCH}/g" /tmp/manifest/payload.txt > /tmp/live_payload_base.txt
+								
+								HEADER_LINE=$(grep "^H," /tmp/live_payload_base.txt)
+								ROLE_LINE=$(grep "^R," /tmp/live_payload_base.txt)
+								grep "^N," /tmp/live_payload_base.txt > /tmp/nodes_only.txt
+								
 								TOTAL_NODES=$(wc -l < /tmp/nodes_only.txt)
 								NODES_PER_FRAME=80
 								TOTAL_FRAMES=$(( (TOTAL_NODES + NODES_PER_FRAME - 1) / NODES_PER_FRAME ))
 								if [ ${TOTAL_FRAMES} -eq 0 ]; then TOTAL_FRAMES=1; fi
+								
 								CURRENT_FRAME=1
 								for ((s=1; s<=TOTAL_NODES; s+=NODES_PER_FRAME)); do
 									sed -n "${s},$((s + NODES_PER_FRAME - 1))p" /tmp/nodes_only.txt > /tmp/chunk_nodes.txt
-									{ echo "${HEADER_LINE}"; cat /tmp/chunk_nodes.txt; echo "${ROLE_LINE}"; echo "${TRAILER_LINE}"; } > /tmp/frame_payload.txt
+									
+									# Form framework chunk containing the live H, specific Node slice, and R
+									{ echo "${HEADER_LINE}"; cat /tmp/chunk_nodes.txt; echo "${ROLE_LINE}"; } > /tmp/frame_content.txt
+									
+									# Calculate signature dynamically across the entire current frame layout (H + N + R)
+									FRAME_HASH=$(sha256sum /tmp/frame_content.txt | awk '{print $1}')
+									
+									# Finalize layout text report append format
+									{ cat /tmp/frame_content.txt; echo "T,${FRAME_HASH}"; } > /tmp/frame_payload.txt
+									
+									if [ -f "${LOG_FILE}" ]; then
+										CURRENT_SIZE=$(stat -c%s "${LOG_FILE}" 2>/dev/null || echo 0)
+										if [ ${CURRENT_SIZE} -ge ${CFG_MAX_SIZE} ]; then
+											rm -f "${LOG_FILE}.${CFG_MAX_ROTS}"
+											for ((i=CFG_MAX_ROTS-1; i>=1; i--)); do
+												if [ -f "${LOG_FILE}.${i}" ]; then mv "${LOG_FILE}.${i}" "${LOG_FILE}.$((i+1))"; fi
+											done
+											mv "${LOG_FILE}" "${LOG_FILE}.1" && touch "${LOG_FILE}"
+										fi
+									fi
+									cat /tmp/frame_payload.txt >> "${LOG_FILE}"
+									echo "" >> "${LOG_FILE}"
+									
+									# Network transport pipeline handling
 									gzip -c /tmp/frame_payload.txt > /tmp/frame_payload.gz
+									MSG_ID=$(printf "%012d" ${COUNTER})
 									STR_FRAME_NUM=$(printf "%06d" ${CURRENT_FRAME})
 									STR_TOTAL_FRAMES=$(printf "%06d" ${TOTAL_FRAMES})
+									
 									echo -n "${MSG_ID},${STR_FRAME_NUM},${STR_TOTAL_FRAMES}|" > /tmp/net_packet.bin
 									cat /tmp/frame_payload.gz >> /tmp/net_packet.bin
 									cat /tmp/net_packet.bin > /dev/udp/${REMOTE_IP}/${REMOTE_UDP_PORT}
+									
 									CURRENT_FRAME=$((CURRENT_FRAME + 1))
 								done
+								
+								if [ ${COUNTER} -ge 999999999999 ]; then COUNTER=0; else COUNTER=$((COUNTER + 1)); fi
+								echo ${COUNTER} > "${SEQ_FILE}"
 								sleep 30
 							done`,
 						},

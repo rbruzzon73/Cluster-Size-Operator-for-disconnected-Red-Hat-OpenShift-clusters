@@ -10,17 +10,17 @@ schema: olm.channel
 package: clustersize
 name: test-channel
 entries:
-  - name: clustersize.v2.0.76
+  - name: clustersize.v2.0.77
 ---
 schema: olm.bundle
-name: clustersize.v2.0.76
+name: clustersize.v2.0.77
 package: clustersize
-image: ghcr.io/rbruzzon73/clustersize-bundle:v2.0.76
+image: ghcr.io/rbruzzon73/clustersize-bundle:v2.0.77
 properties:
   - type: olm.package
     value:
       packageName: clustersize
-      version: 2.0.76
+      version: 2.0.77
   - type: olm.arch
     value:
       amd64: true
@@ -28,7 +28,7 @@ properties:
     value:
       description: "Cluster Size Operator utility to monitor and scale cluster infrastructure resources."
       displayName: "Cluster Size Operator"
-      version: 2.0.76
+      version: 2.0.77
       provider:
         name: "Custom Utilities"
       installModes:
