@@ -445,3 +445,10 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       
 ## Data Diode or Secure Media Transfer: 
    - The finalized CSV compliance report is then transferred out of the isolated zone via a unidirectional hardware data diode or a secure media transfer protocol, guaranteeing strict one-way data movement without allowing inbound network access.
+
+
+## Custer Size Operator (Pending Implementation)
+
+## Cluster Size Operator integration with the solution: Evaluating Red Hat OpenShift 4 Subscriptions for Connected Clusters Using Telemetry Data (Pending Implementation)
+https://access.redhat.com/solutions/7144723
+
