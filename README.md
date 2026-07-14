@@ -478,7 +478,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
    - The finalized CSV compliance report is then transferred out of the isolated zone via a unidirectional hardware data diode or a secure media transfer protocol, guaranteeing strict one-way data movement without allowing inbound network access.
 
 
-## Custer Size Operator Installation (Pending Implementation)
+## Custer Size Operator Installation:
 
    - Step 1: Locate the Operator in the OpenShift Software Catalog (Ref: Figure 1)
 
