@@ -450,32 +450,46 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 ## Custer Size Operator Installation (Pending Implementation)
 
 
-*<p align="right"> Figure 1 - Red Hat OpenShift Software Catalog</p>*
-<img align="right" width="300" height="500" src="https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/clustersize-operator-images/1-SoftwareCatalog-ClusterSizeOperator-Install.png">
+<p align="left">
+  <em><strong>Figure 1 - Red Hat OpenShift Software Catalog</strong></em><br>
+  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/1-SoftwareCatalog-ClusterSizeOperator-Install.png" width="850">
+</p>
 <br>
 
-*<p align="right"> Figure 2 - Operator installation in openshift-size-monitoring namespace</p>*
-<img align="right" width="300" height="500" src="https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/clustersize-operator-images/2-clustersizeoperator-installed-in-openshift-size-monitoring.png">
+<p align="left">
+  <em><strong>Figure 2 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
+  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/2-clustersizeoperator-installed-in-openshift-size-monitoring.png" width="850">
+</p>
 <br>
 
-*<p align="right"> Figure 3 - Operator installed successfully </p>*
-<img align="right" width="300" height="500" src="https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/clustersize-operator-images/3-clustersizeoperator-installed.png">
+<p align="left">
+  <em><strong>Figure 3 - Operator installed successfully</strong></em><br>
+  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/3-clustersizeoperator-installed.png" width="850">
+</p>
 <br>
 
-*<p align="right"> Figure 4 - Create ClusterSizeConfig</p>*
-<img align="right" width="300" height="500" src="https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/clustersize-operator-images/4-ClusterSizeConfig-definintion.png">
+<p align="left">
+  <em><strong>Figure 4 - Create ClusterSizeConfig</strong></em><br>
+  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/4-ClusterSizeConfig-definintion.png" width="850">
+</p>
 <br>
 
-*<p align="right"> Figure 5 - ClusterSizeConfig example</p>*
-<img align="right" width="300" height="500" src="https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/clustersize-operator-images/6-example-clustersizeconfigs.png">
+<p align="left">
+  <em><strong>Figure 5 - ClusterSizeConfig example</strong></em><br>
+  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/6-example-clustersizeconfigs.png" width="850">
+</p>
 <br>
 
-*<p align="right"> Figure 6 - ClusterSizeConfig created</p>*
-<img align="right" width="300" height="500" src="https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/clustersize-operator-images/5-configurationexample.png">
+<p align="left">
+  <em><strong>Figure 6 - ClusterSizeConfig created</strong></em><br>
+  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/5-configurationexample.png" width="850">
+</p>
 <br>
 
-*<p align="right"> Figure 7 - Cluster Size Operator PODs</p>*
-<img align="right" width="300" height="500" src="https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/clustersize-operator-images/7-clustersizeconfigs-pods.png">
+<p align="left">
+  <em><strong>Figure 7 - Cluster Size Operator PODs</strong></em><br>
+  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/7-clustersizeconfigs-pods.png" width="850">
+</p>
 <br>
 
 ## Cluster Size Operator integration with the solution: Evaluating Red Hat OpenShift 4 Subscriptions for Connected Clusters Using Telemetry Data (Pending Implementation)
