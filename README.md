@@ -536,6 +536,100 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       </p>
       <br>
 
+## Telemetry Receiver Configuration and Deployment
+
+   - This procedure describes how to install, configure, and verify the telemetry_receiver.py component to successfully capture sizing data sent by the clustersize-operator.
+
+      - Prerequisites
+
+         - A target server running a Linux operating system (RHEL/CentOS/Ubuntu).
+
+         - Python version 3.8 or higher installed on the server.
+
+         - Network connectivity open between the OpenShift cluster nodes and the telemetry server on the configured UDP port.
+       
+      - Installation and Startup Procedure
+
+         - Firewall Port Configuration
+
+            - To allow the server to accept incoming UDP traffic from the operator, open the telemetry port (e.g., 555):
+
+               ~~~
+               sudo firewall-cmd --add-port=555/udp --permanent
+               sudo firewall-cmd --reload
+               ~~~
+
+         - Script Deployment
+
+            - Create a dedicated directory (e.g., /opt/telemetry/) to the Telemetry Receiver
+
+               ~~~
+               mkdir /opt/telemetry/
+               ~~~
+
+            - Dowload the file [telemetry_receiver.py](https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/blob/main/telemetry_receiver/telemetry_receiver.py)
+
+            - Move the telemetry_receiver.py in the directory dedicated to the Telemetry Receiver (e.g., /opt/telemetry/)
+          
+         - HMAC Salt definition 
+
+            - Write the decryption password to a highly restricted keyfile
+            
+               ~~~
+               echo -n "MyDecryptionPassword" | sudo tee /etc/.telemetry_key > /dev/null
+               ~~~
+               
+            - Lock down permissions (Read-only by root)
+                        
+               ~~~
+               sudo chmod 400 /etc/.telemetry_key
+               sudo chown root:root /etc/.telemetry_key
+               ~~~
+            
+            - Encrypt the actual HMAC salt value using the keyfile 
+            
+               - `MySecretSaltValue` is the default value used by the Cluster Size Operator in Red Hat OpenShift
+
+                  ~~~
+                  echo -n "MySecretSaltValue" | sudo openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -salt -pass file:/etc/.telemetry_key -out /etc/telemetry_salt.enc
+                  ~~~
+
+         - Background Service Configuration 
+
+            -  To ensure the receiver runs continuously in the background and restarts automatically on failures, configure it as a systemd service:
+
+               ~~~
+               sudo cat << 'EOF' > /etc/systemd/system/telemetry.service
+               [Unit]
+               Description=Telemetry Receiver Service
+               After=network.target
+               
+               [Service]
+               Type=simple
+               ExecStart=/usr/bin/python3 /opt/telemetry/telemetry_receiver.py --retention --display=false
+               Restart=on-failure
+               
+               [Install]
+               WantedBy=multi-user.target
+               EOF
+               
+               # Reload systemd, enable, and start the service
+               sudo systemctl daemon-reload
+               sudo systemctl enable --now telemetry.service
+               ~~~
+
+         - Verification
+
+            - Verify that the service is active, running, and listening without errors:
+
+               ~~~
+               sudo systemctl status telemetry.service
+
+               # Monitor incoming metrics and telemetry logs in real time
+               sudo journalctl -u telemetry.service -f
+               ~~~       
+
+            
 ## Cluster Size Operator integration with the solution: Evaluating Red Hat OpenShift 4 Subscriptions for Connected Clusters Using Telemetry Data (Pending Implementation)
 https://access.redhat.com/solutions/7144723
 
