@@ -468,7 +468,9 @@ When operating multiple disconnected clusters across an enterprise, managing dis
      <br>
 
    - Step 3: Verify Successful Operator Deployment (Ref: Figure 3)
+     
       - OpenShift will pull the operator image and prepare the deployment. Once the installation completes, the console will display an "Operator installed successfully" message.
+      
       - The Custom Resource Definitions (CRDs) are now registered, meaning your cluster's API is ready to accept configuration objects.
 
       <p align="left">
@@ -478,7 +480,9 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       <br>
 
    - Step 4: Open the ClusterSizeConfig Creation Form (Ref: Figure 4)
+     
       - Navigate to the installed operator details and click on Create ClusterSizeConfig.
+        
       - This opens a user-friendly form where you can define your monitoring settings, including the check interval, remote server IP, UDP port, and target cryptographic validation secret.
 
       <p align="left">
@@ -488,7 +492,9 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       <br>
 
    - Step 5: Manage Sizing Configurations (Ref: Figure 5)
+     
       - In the ClusterSizeConfigs tab of the operator, you can view, edit, or delete existing configuration instances running in your namespace.
+        
       - This dashboard lets you track the current status and last update times for each monitoring configuration.
 
       <p align="left">
@@ -498,6 +504,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       <br>
 
    - Step 6: Configure and Save Sizing Parameters (Ref: Figure 6)
+   
       - Fill in the configuration details for your monitor:
 
          - Check Interval: Define how often the operator checks cluster metrics (e.g., 1h or 60s).
