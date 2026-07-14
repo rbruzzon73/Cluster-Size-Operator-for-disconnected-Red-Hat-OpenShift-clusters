@@ -22,7 +22,7 @@ type ClusterSizeConfigSpec struct {
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
 
-        // LogMaxRotations sets the maximum number of historical backup log archive files to retain.
+	// LogMaxRotations sets the maximum number of historical backup log archive files to retain.
 	// +optional
 	// +kubebuilder:default=10
 	LogMaxRotations int `json:"log_max_rotations,omitempty"`
