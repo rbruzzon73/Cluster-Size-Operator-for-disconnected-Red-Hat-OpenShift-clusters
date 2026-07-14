@@ -3,8 +3,11 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 2.0.79
+VERSION ?= 2.0.83
 CONTROLLER_GEN_VERSION ?= v0.17.2
+
+CHANNELS ?= test-channel
+DEFAULT_CHANNEL ?= test-channel
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -242,6 +245,15 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 	cd config/manager && $(KUSTOMIZE) edit set image controller=ghcr.io/rbruzzon73/clustersize-operator:v$(VERSION)
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	$(OPERATOR_SDK) bundle validate ./bundle
+
+	# Appends the suggested namespace AND the auto-create template to annotations.yaml
+	@echo '  operatorframework.io/suggested-namespace: "openshift-size-monitoring"' >> bundle/metadata/annotations.yaml
+	@echo '  operatorframework.io/suggested-namespace-template: |-' >> bundle/metadata/annotations.yaml
+	@echo '    { "apiVersion": "v1", "kind": "Namespace", "metadata": { "name": "openshift-size-monitoring" } }' >> bundle/metadata/annotations.yaml
+
+	# Updates bundle.Dockerfile labels
+	@sed -i '/# Copy files to locations specified by labels./i LABEL operatorframework.io.suggested-namespace="openshift-size-monitoring"' bundle.Dockerfile
+	@sed -i '/# Copy files to locations specified by labels./i LABEL operatorframework.io.suggested-namespace-template="{\\\"apiVersion\\\":\\\"v1\\\",\\\"kind\\\":\\\"Namespace\\\",\\\"metadata\\\":{\\\"name\\\":\\\"openshift-size-monitoring\\\"}}"' bundle.Dockerfile
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.

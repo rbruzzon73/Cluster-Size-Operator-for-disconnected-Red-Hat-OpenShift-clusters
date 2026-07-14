@@ -19,13 +19,22 @@ metadata:
     capabilities: Basic Install
     categories: Monitoring
     certified: "false"
-    containerImage: ghcr.io/rbruzzon73/clustersize-bundle:v2.0.79
+    containerImage: ghcr.io/rbruzzon73/clustersize-bundle:v2.0.83
     createdAt: "2026-07-13T00:00:00Z"
     description: Cluster Size Operator utility to monitor and scale cluster infrastructure
       resources.
+    operatorframework.io/initial-operatornamespaces: openshift-size-monitoring
     operatorframework.io/suggested-namespace: openshift-size-monitoring
+    operatorframework.io/suggested-namespace-template: |-
+      {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": {
+          "name": "openshift-size-monitoring"
+        }
+      }
     support: Platform Team
-  name: clustersize.v2.0.79
+  name: clustersize.v2.0.83
   namespace: openshift-size-monitoring
 spec:
   apiservicedefinitions: {}
@@ -65,7 +74,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['olm.targetNamespaces']
-                image: ghcr.io/rbruzzon73/clustersize-operator:v2.0.79
+                image: ghcr.io/rbruzzon73/clustersize-operator:v2.0.83
                 name: manager
                 resources:
                   limits:
@@ -96,4 +105,4 @@ spec:
   maturity: stable
   provider:
     name: Platform Team
-  version: 2.0.79
+  version: 2.0.83
