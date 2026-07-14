@@ -449,18 +449,23 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
 ## Custer Size Operator Installation (Pending Implementation)
 
+   - Step 1: Locate the Operator in the OpenShift Software Catalog (Ref: Figure 1)
 
-<p align="left">
-  <em><strong>Figure 1 - Red Hat OpenShift Software Catalog</strong></em><br>
-  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/1-SoftwareCatalog-ClusterSizeOperator-Install.png" width="850">
-</p>
-<br>
+      - Log in to your Red Hat OpenShift web console. Navigate to Ecosystem > Software Catalog in the left-hand menu. Search for "Cluster Size Operator", click on its tile to open the detail pane, and click Install to begin the configuration.
 
-<p align="left">
-  <em><strong>Figure 2 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
-  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/2-clustersizeoperator-installed-in-openshift-size-monitoring.png" width="850">
-</p>
-<br>
+         <p align="left">
+           <em><strong>Figure 1 - Red Hat OpenShift Software Catalog</strong></em><br>
+           <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/1-SoftwareCatalog-ClusterSizeOperator-Install.png" width="850">
+         </p>
+         <br>
+
+   - Step 2: On the Operator Installation page, confirm the operator deployment in the recommended namespace: openshift-size-monitoring
+   
+         <p align="left">
+           <em><strong>Figure 2 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
+           <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/2-clustersizeoperator-installed-in-openshift-size-monitoring.png" width="850">
+         </p>
+         <br>
 
 <p align="left">
   <em><strong>Figure 3 - Operator installed successfully</strong></em><br>
