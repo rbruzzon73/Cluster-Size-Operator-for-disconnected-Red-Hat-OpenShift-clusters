@@ -314,9 +314,9 @@ The baseline topology is structured as:
 
       - The telemetry_receiver.py script uses HMAC-SHA256 to verify payload integrity.
       - To avoid exposing the plain-text verification salt or its decryption password in the process list (ps aux), the salt is encrypted on disk and decrypted in-memory at startup.
+      - **Note:** The Red Hat OpenShift secret is automatically created by the operator during its first installation with the default `HASH_SALT` value of `"MySecretSaltValue"`. 
 
-         - Run these commands as root in the collector node to configure the decryption key and encrypt your HMAC salt.
-
+         - Run these commands as root in the collector node to configure the decryption key and encrypt the HMAC salt.
          - Point Of Attention: Do not include leading or trailing spaces inside the quotation marks (e.g., use "MyPassword", not " MyPassword "), otherwise the spaces will become part of your cryptographic keys.
          
             ~~~
@@ -347,8 +347,10 @@ The baseline topology is structured as:
 
        - Salts secret definition in the openshift-size-monitoring project of Red Hat OpenShift Cluster:
 
-          -  To create the secret in OpenShift (OCP), you can use either the command-line interface (oc CLI) or a YAML manifest file.
-
+          - **Note:** The Red Hat OpenShift secret is automatically created by the operator during its first installation with the default `HASH_SALT` value of `"MySecretSaltValue"`.          
+          - You only need to perform the steps below if you want to update or customize this value. 
+          - To update the secret in OpenShift, you can use either the command-line interface (oc CLI) or a YAML manifest file.
+          
              - Using the oc CLI commands
 
                 ~~~
