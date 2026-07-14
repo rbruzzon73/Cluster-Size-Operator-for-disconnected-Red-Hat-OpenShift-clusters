@@ -453,49 +453,79 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
       - Log in to your Red Hat OpenShift web console. Navigate to Ecosystem > Software Catalog in the left-hand menu. Search for "Cluster Size Operator", click on its tile to open the detail pane, and click Install to begin the configuration.
 
-         <p align="left">
-           <em><strong>Figure 1 - Red Hat OpenShift Software Catalog</strong></em><br>
-           <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/1-SoftwareCatalog-ClusterSizeOperator-Install.png" width="850">
-         </p>
-         <br>
+      <p align="left">
+        <em><strong>Figure 1 - Red Hat OpenShift Software Catalog</strong></em><br>
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/1-SoftwareCatalog-ClusterSizeOperator-Install.png" width="850">
+      </p>
+      <br>
 
-   - Step 2: On the Operator Installation page, confirm the operator deployment in the recommended namespace: openshift-size-monitoring
+   - Step 2: On the Operator Installation page, confirm the operator deployment in the recommended namespace: openshift-size-monitoring (Ref: Figure 2)
    
-         <p align="left">
-           <em><strong>Figure 2 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
-           <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/2-clustersizeoperator-installed-in-openshift-size-monitoring.png" width="850">
-         </p>
-         <br>
+     <p align="left">
+        <em><strong>Figure 2 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/2-clustersizeoperator-installed-in-openshift-size-monitoring.png" width="850">
+     </p>
+     <br>
 
-<p align="left">
-  <em><strong>Figure 3 - Operator installed successfully</strong></em><br>
-  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/3-clustersizeoperator-installed.png" width="850">
-</p>
-<br>
+   - Step 3: Verify Successful Operator Deployment (Ref: Figure 3)
+      - OpenShift will pull the operator image and prepare the deployment. Once the installation completes, the console will display an "Operator installed successfully" message.
+      - The Custom Resource Definitions (CRDs) are now registered, meaning your cluster's API is ready to accept configuration objects.
 
-<p align="left">
-  <em><strong>Figure 4 - Create ClusterSizeConfig</strong></em><br>
-  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/4-ClusterSizeConfig-definintion.png" width="850">
-</p>
-<br>
+      <p align="left">
+        <em><strong>Figure 3 - Operator installed successfully</strong></em><br>
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/3-clustersizeoperator-installed.png" width="850">
+      </p>
+      <br>
 
-<p align="left">
-  <em><strong>Figure 5 - ClusterSizeConfig example</strong></em><br>
-  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/6-example-clustersizeconfigs.png" width="850">
-</p>
-<br>
+   - Step 4: Open the ClusterSizeConfig Creation Form (Ref: Figure 4)
+      - Navigate to the installed operator details and click on Create ClusterSizeConfig.
+      - This opens a user-friendly form where you can define your monitoring settings, including the check interval, remote server IP, UDP port, and target cryptographic validation secret.
 
-<p align="left">
-  <em><strong>Figure 6 - ClusterSizeConfig created</strong></em><br>
-  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/5-configurationexample.png" width="850">
-</p>
-<br>
+      <p align="left">
+        <em><strong>Figure 4 - Create ClusterSizeConfig</strong></em><br>
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/4-ClusterSizeConfig-definintion.png" width="850">
+      </p>
+      <br>
 
-<p align="left">
-  <em><strong>Figure 7 - Cluster Size Operator PODs</strong></em><br>
-  <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/7-clustersizeconfigs-pods.png" width="850">
-</p>
-<br>
+   - Step 5: Manage Sizing Configurations (Ref: Figure 5)
+      - In the ClusterSizeConfigs tab of the operator, you can view, edit, or delete existing configuration instances running in your namespace.
+      - This dashboard lets you track the current status and last update times for each monitoring configuration.
+
+      <p align="left">
+        <em><strong>Figure 5 - ClusterSizeConfig example</strong></em><br>
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/6-example-clustersizeconfigs.png" width="850">
+      </p>
+      <br>
+
+   - Step 6: Configure and Save Sizing Parameters (Ref: Figure 6)
+      - Fill in the configuration details for your monitor:
+
+         - Check Interval: Define how often the operator checks cluster metrics (e.g., 1h or 60s).
+
+         - Remote IP and UDP Port: Specify the destination endpoint receiving your telemetry network packets.
+
+         - Secret: Provide the name of the Kubernetes Secret (e.g., clustersize-secrets or pippo-secret) containing the mandatory HASH_SALT key for HMAC signing.
+
+         - Log limits: Define maximum file size and rotation values before saving.
+
+      <p align="left">
+        <em><strong>Figure 6 - ClusterSizeConfig created</strong></em><br>
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/5-configurationexample.png" width="850">
+      </p>
+      <br>
+
+   - Step 7: Verify Active Workload Pods (Ref: Figure 7)
+      - Once the configuration is saved, the operator deploys the necessary backend workloads. In your OpenShift topology view or pod list, you will see two running pods:
+
+         - controller-manager: The control plane pod that watches your configurations and manages resources.
+
+         - clustersize: The worker data-plane pod that collects cluster metrics, signs them securely using the key in your secret, and streams them out via UDP.
+
+      <p align="left">
+        <em><strong>Figure 7 - Cluster Size Operator PODs</strong></em><br>
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/7-clustersizeconfigs-pods.png" width="850">
+      </p>
+      <br>
 
 ## Cluster Size Operator integration with the solution: Evaluating Red Hat OpenShift 4 Subscriptions for Connected Clusters Using Telemetry Data (Pending Implementation)
 https://access.redhat.com/solutions/7144723
