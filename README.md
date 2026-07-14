@@ -606,7 +606,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
                
                [Service]
                Type=simple
-               ExecStart=/usr/bin/python3 /opt/telemetry/telemetry_receiver.py --retention --display=false
+               ExecStart=/usr/bin/python3 /opt/telemetry/telemetry_receiver.py --retention 90 --display=false
                Restart=on-failure
                
                [Install]
