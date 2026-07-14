@@ -475,7 +475,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
       <p align="left">
         <em><strong>Figure 3 - Operator installed successfully</strong></em><br>
-        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/3-clustersizeoperator-installed.png" width="850">
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/3-clustersizeoperator-installed.png" width="425">
       </p>
       <br>
 
@@ -530,7 +530,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
       <p align="left">
         <em><strong>Figure 7 - Cluster Size Operator PODs</strong></em><br>
-        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/7-clustersizeconfigs-pods.png" width="850">
+        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/7-clustersizeconfigs-pods.png" width="425">
       </p>
       <br>
 
