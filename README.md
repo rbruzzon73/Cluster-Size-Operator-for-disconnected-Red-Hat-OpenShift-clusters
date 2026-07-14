@@ -439,11 +439,40 @@ When operating multiple disconnected clusters across an enterprise, managing dis
    - A scheduled cron job parses the daily rolling log, deduplicates the entries by extracting the latest valid timestamp for each unique Cluster_ID, and compiles a single, unified CSV master compliance file:
 
       ~~~
-      Cluster_ID,Masked_Node,Role,CPU,IsBaremetal
-      d08824f5-4252...,node-001,control-plane infra master,40,true
-      d08824f5-4252...,node-005,ODF ingress worker,120,true
-      d08824f5-4252...,node-007,ruolo1 ruolo2 worker,64,true
+      H,999924f5-4252-4883-b587-01110c52ef2f,4,4.20.27,4.19.30,2026-01-15 09:00:00 UTC,None,2026-07-14 15:30:00 UTC,amd64
+      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-01,control-plane master,40,true
+      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-02,control-plane master,40,true
+      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-03,worker,50,true
+      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-04,worker,50,true
+      R,UiwxPTQuMjAuMjcsMj00LjE5LjMw
+      T,token-hist-jul
+      H,aaaa24f5-4252-4883-b587-01110c52ef2f,6,4.20.27,4.19.30,2026-06-30 13:57:58 UTC,None,2026-07-14 13:58:00 UTC,amd64
+      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-master-01,control-plane master,40,true
+      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-master-02,control-plane master,40,true
+      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-master-03,control-plane master,40,true
+      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-worker-01,worker,50,true
+      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-worker-02,worker,50,true
+      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-worker-04,worker,50,true
+      R,UiwxPTQuMjAuMjcsMj00LjE5LjMw
       ~~~
+
+  - Deduplication arguments supported
+  
+     ~~~
+     usage: deduplicate_telemetry.py [-h] [--start START] [--end END] [--months-back MONTHS_BACK] [--last-day] [--output OUTPUT]
+
+     Deduplica i log di telemetria e genera il file master.
+
+     options:
+       -h, --help                   Show this help message and exit
+       --start START                Data inizio (YYYY-MM-DD)
+       --end END                    Data fine (YYYY-MM-DD)
+       --months-back MONTHS_BACK    Elabora i dati partendo da N mesi fa rispetto al mese attuale
+       --last-day                   Elabora solo l'ultimo giorno disponibile
+       --output OUTPUT              Percorso del file di output personalizzato
+     ~~~
+
+  
       
 ## Data Diode or Secure Media Transfer: 
    - The finalized CSV compliance report is then transferred out of the isolated zone via a unidirectional hardware data diode or a secure media transfer protocol, guaranteeing strict one-way data movement without allowing inbound network access.
