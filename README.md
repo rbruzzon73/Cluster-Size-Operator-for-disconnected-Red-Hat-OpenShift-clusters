@@ -596,7 +596,14 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
          - Background Service Configuration 
 
-            -  To ensure the receiver runs continuously in the background and restarts automatically on failures, configure it as a systemd service:
+            - To ensure the receiver runs continuously in the background and restarts automatically on failures, configure it as a systemd service.
+
+            - In the context of a telemetry receiver command, those flags configure how long received data is kept and whether it is printed to the screen:
+
+               - `--retention 90`: Specifies that the receiver should keep or store the collected telemetry data for 90 days before automatically deleting (pruning) it to save disk space.
+               - `--display=false`: Tells the script not to print the incoming telemetry data to the standard output (terminal screen) in real time to prevent the log files from growing excessively large with repetitive data dumps.
+
+            - Follow these steps to create the Telemetry Receiver Background Service:
 
                ~~~
                sudo cat << 'EOF' > /etc/systemd/system/telemetry.service
