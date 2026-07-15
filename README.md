@@ -459,7 +459,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
                                         │
                                         ▼ [Intermediate: telemetry_deduplicated.csv]
                          ┌──────────────────────────────┐
-                         │  DATA DIODE / SECURE MEDIA   │ [Stage 2: One-way Dara transfer]
+                         │  DATA DIODE / SECURE MEDIA   │ [Stage 2: One-way Data Transfer]
                          │  - One-way compliance CSV    │
                          └──────────────┬───────────────┘
                                         │
@@ -504,7 +504,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       ~~~
       ┌────────────────────────────────────────────────────────┐
       │ 1. DEDUPLICATION (deduplicate_telemetry.py)            │ [Stage 1: Processing]
-      │    Parses daily raw .log files and isolates latest      │
+      │    Parses daily raw .log files and isolates latest     │
       │    state per cluster.                                  │
       └──────────────────────────┬─────────────────────────────┘
                                  │
