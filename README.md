@@ -794,6 +794,40 @@ When operating multiple disconnected clusters across an enterprise, managing dis
                ~~~       
 
             
-## Cluster Size Operator integration with the solution: Evaluating Red Hat OpenShift 4 Subscriptions for Connected Clusters Using Telemetry Data (Pending Implementation)
-https://access.redhat.com/solutions/7144723
+## Telemetry deduplication and evaluation compliance - **WORK IN PROGRESS**
 
+- Initial versions are available at the [telemetry_receiver repository](https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/tree/main/telemetry_receiver)
+
+   - deduplicate_telemetry.py syntax
+
+      ~~~
+      $ python3 deduplicate_telemetry.py --help
+      usage: deduplicate_telemetry.py [-h] [--start START] [--end END] [--last-day] [--output OUTPUT]
+
+      Deduplicate raw telemetry log streams.
+
+      optional arguments:
+        -h, --help       show this help message and exit
+        --start START    Start Date (YYYY-MM-DD)
+        --end END        End Date (YYYY-MM-DD)
+        --last-day       Process only the latest available log file
+        --output OUTPUT  Path to the output deduplicated raw file
+      ~~~
+
+   - evaluate_compliance.py syntax
+
+      ~~~
+      $ python3 evaluate_compliance.py --help
+      usage: evaluate_compliance.py [-h] [--input INPUT] [--output OUTPUT] [--subscriptions SUBSCRIPTIONS] [--lifecycle LIFECYCLE] [--start START] [--end END]
+
+      Evaluate cluster capacity license compliance and resource gaps.
+
+      optional arguments:
+        -h, --help                         show this help message and exit
+        --input INPUT                      Path to the deduplicated raw telemetry file
+        --output OUTPUT                    Path to write the final compliance CSV report
+        --subscriptions SUBSCRIPTIONS      Path to customer subscription file
+        --lifecycle LIFECYCLE              Path to OpenShift lifecycle matrix mapping
+        --start START                      Start Date (YYYY-MM-DD) for active EUS calculations
+        --end END                         End Date (YYYY-MM-DD) for active EUS calculations
+      ~~~
