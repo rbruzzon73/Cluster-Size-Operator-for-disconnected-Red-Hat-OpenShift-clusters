@@ -561,6 +561,10 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
          - Ensures that the target audit zone (Stage 3) has zero inbound network access back to the active OpenShift clusters.
 
+         - **Note on Stage 2 implementation:**
+
+            - Because the choice of one-way transport technology depends entirely on internal security compliance and physical isolation standards, the best technical solution for Stage 2 must be evaluated and defined exclusively by the Customer.
+
 
       - Stage 3: Compliance -Compliance & Gap Evaluation (evaluate_compliance.py)
 
