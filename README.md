@@ -45,7 +45,7 @@
    ┌────────────────────────────────────────────────────────┐
    │                 METRIC COLLECTOR POD                   │
    │  - Alphabetically sorts and masks node names           │
-   │  - Collects: vCPU, Hypervisor (BM vs VM)          │
+   │  - Collects: vCPU, Hypervisor (BM vs VM)               │
    │  - Generates HMAC-SHA256 data-integrity signatures     │
    │  - Compresses whole snapshot via Gzip into 1 UDP packet│
    └────────────────────────────────────────────────────────┘
