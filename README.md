@@ -422,9 +422,12 @@ The baseline topology is structured as:
                    oc apply -f clustersize-secret.yaml
                    ~~~
                
-Availability (Self-Healing): 
+- Data Availability (Self-Healing): 
+
    - Because UDP is a connectionless protocol, it does not guarantee packet delivery. 
+
    - If a network switch drops a frame packet during heavy network congestion, the central receiver discards the incomplete payload. 
+   
    - However, because the cluster operator continuously sends fresh telemetry updates at regular intervals, any missed snapshots self-heal automatically during the next interval cycle.
 
 ## Managing Multiple Disconnected Clusters
