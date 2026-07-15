@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Define explicit version matrices
-OLD_VER="2.0.92"
-NEW_VER="2.0.93"
+OLD_VER="2.0.96"
+NEW_VER="2.0.97"
 NAMESPACE="openshift-size-monitoring"
 
 # Ensure this line exists inside your upgrade_and_push.sh script:
@@ -11,6 +11,7 @@ sed -i "s/VERSION ?= ${OLD_VER}/VERSION ?= ${NEW_VER}/g" Makefile
 sed -i "s/newTag: v${OLD_VER}/newTag: v${NEW_VER}/g" config/manager/kustomization.yaml
 
 echo "=== 0. Regenerating deepcopy and OpenAPI manifest bindings ==="
+make generate manifests
 make manifests
 make bundle
 

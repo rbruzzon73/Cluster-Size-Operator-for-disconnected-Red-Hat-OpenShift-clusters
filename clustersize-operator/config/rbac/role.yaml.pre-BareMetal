@@ -5,15 +5,6 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - configmaps
-  - nodes
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - apps
   resources:
   - deployments
@@ -29,6 +20,23 @@ rules:
   - config.openshift.io
   resources:
   - clusterversions
+  - clusteroperators # Aggiunto per verificare lo stato di 'baremetal'
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts # Aggiunto per verificare la presenza di BareMetalHost
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps # Aggiunto a livello cluster per consentire la lettura in kube-system
   verbs:
   - get
   - list
@@ -44,14 +52,6 @@ rules:
   - list
   - patch
   - update
-  - watch
-- apiGroups:
-  - metal3.io
-  resources:
-  - baremetalhosts
-  verbs:
-  - get
-  - list
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1

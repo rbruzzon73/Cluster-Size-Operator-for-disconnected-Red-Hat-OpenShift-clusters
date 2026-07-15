@@ -1,0 +1,10 @@
+premium_s390x_subscriptions=36
+standard_s390x_subscriptions=18
+premium_ocp_subscriptions=985
+standard_ocp_subscriptions=917
+standard_ocp_term_1=693
+standard_ocp_term_2=100
+standard_ocp_term_3=200
+premium_ocp_term_2=1
+premium_ocp_term_3=1
+

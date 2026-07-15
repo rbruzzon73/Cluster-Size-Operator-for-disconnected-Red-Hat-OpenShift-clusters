@@ -7,6 +7,7 @@ rules:
   - ""
   resources:
   - nodes
+  - configmaps # Necessario per leggere la ConfigMap in kube-system
   verbs:
   - get
   - list
@@ -15,6 +16,15 @@ rules:
   - config.openshift.io
   resources:
   - clusterversions
+  - clusteroperators # Aggiunto per il controllo baremetal operator
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal3.io
+  resources:
+  - baremetalhosts # Aggiunto per il controllo dei nodi fisici baremetal
   verbs:
   - get
   - list

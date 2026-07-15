@@ -6,8 +6,8 @@ metadata:
     capabilities: Basic Install
     categories: Monitoring
     certified: "false"
-    containerImage: ghcr.io/rbruzzon73/clustersize-bundle:v2.0.93
-    createdAt: "2026-07-14T09:48:03Z"
+    containerImage: ghcr.io/rbruzzon73/clustersize-bundle:v2.0.97
+    createdAt: "2026-07-15T07:43:36Z"
     description: Cluster Size Operator utility to monitor and scale cluster infrastructure
       resources.
     operatorframework.io/initial-operatornamespaces: openshift-size-monitoring
@@ -23,7 +23,7 @@ metadata:
     operators.operatorframework.io/builder: operator-sdk-v1.33.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     support: Platform Team
-  name: clustersize.v2.0.93
+  name: clustersize.v2.0.97
   namespace: openshift-size-monitoring
 spec:
   apiservicedefinitions: {}
@@ -45,6 +45,7 @@ spec:
           - ""
           resources:
           - nodes
+          - configmaps
           verbs:
           - get
           - list
@@ -53,6 +54,15 @@ spec:
           - config.openshift.io
           resources:
           - clusterversions
+          - clusteroperators
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - baremetalhosts
           verbs:
           - get
           - list
@@ -91,7 +101,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['olm.targetNamespaces']
-                image: ghcr.io/rbruzzon73/clustersize-operator:v2.0.93
+                image: ghcr.io/rbruzzon73/clustersize-operator:v2.0.97
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -216,4 +226,4 @@ spec:
   maturity: stable
   provider:
     name: Platform Team
-  version: 2.0.93
+  version: 2.0.97
