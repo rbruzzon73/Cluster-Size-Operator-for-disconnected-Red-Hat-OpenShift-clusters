@@ -109,6 +109,26 @@
    - Allocated vCPU Count: Total virtual cores per node.
    - Deployment Environment State: (true for Bare-Metal hardware, false for virtualized OpenStack/KVM instances).
 
+- The operator determines the cluster's platform using a step-by-step logic. 
+- However, there is a specific blind spot when it comes to User-Provisioned Infrastructure (UPI) Baremetal deployments.
+- Here is how the logic behaves:
+
+   - Step 1: Check for BareMetalHost Resources (Metal3)
+   
+      - The operator looks for active physical host objects (BareMetalHost).
+
+      - In a standard UPI deployment, because you provision the operating system and hardware manually outside of OpenShift, these BareMetalHost objects are not present.
+
+   - Step 2: Parse the install-config.yaml ConfigMap
+
+      - If no baremetal hosts are found, the operator falls back to reading the original installation configuration. It looks at the platform fields to see if a specific infrastructure provider (like vsphere, aws, etc.) was declared.
+
+      - The UPI Limitation: For UPI baremetal installations, the standard practice is to set the platform to none: {}.
+
+   - Step 3: Fallback to "None"
+
+      - If both checks yield nothing (no BareMetalHost objects exist, and the install-config platform is empty or set to none), the operator has no physical or API-driven indicators to know it is running on physical hardware. It must default to None.
+
 ## Data & Network Volume Evaluation
 
 - When a telemetry check triggers (either via a manual configuration change or when the interval heartbeat expires), the internal fragmentation engine packages node records together, compresses them via Gzip, and streams them over UDP.
@@ -273,11 +293,16 @@ The baseline topology is structured as:
    - Read-Only Global Context (clusterPermissions scope)
 
       - To correctly size target infrastructures, the operator evaluates cluster topology using non-mutating, cluster-wide read queries (get, list, watch). 
+      
       - No creation, modification, or deletion rights exist at the cluster layer:
 
-         - Cluster Metadata (nodes): Read-only visibility into node capacity and structural topology to compute structural calculations.
+         - Cluster Metadata (nodes): Read-only visibility into node capacity and structural topology to compute core-to-vCPU calculations.
 
-         - Platform Engine (clusterversions): Read-only verification of OpenShift target architecture layers.
+         - Platform Engine (clusterversions): Read-only verification of OpenShift target architecture layers and version histories.
+
+         - Platform Discovery (configmaps): Read-only access to read the global cluster-config-v1 configuration in kube-system to determine platform installation characteristics.
+
+         - Physical Infrastructure (baremetalhosts): Read-only inspection of Metal3 entities to detect baremetal physical host presence.
 
       ~~~
       clusterPermissions:
@@ -286,7 +311,7 @@ The baseline topology is structured as:
           - ""
           resources:
           - nodes
-          - secrets
+          - configmaps
           verbs:
           - get
           - list
@@ -295,6 +320,14 @@ The baseline topology is structured as:
           - config.openshift.io
           resources:
           - clusterversions
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - metal3.io
+          resources:
+          - baremetalhosts
           verbs:
           - get
           - list
