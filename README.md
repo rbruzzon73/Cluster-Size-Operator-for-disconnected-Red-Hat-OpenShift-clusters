@@ -449,22 +449,22 @@ When operating multiple disconnected clusters across an enterprise, managing dis
                                         │
                                         ▼ [Raw Consolidated Logs: telemetry_YYYY-MM-DD.log]
                          ┌──────────────────────────────┐
-                         │  DATA DIODE / SECURE MEDIA   │
-                         │  - One-way transport zone    │
-                         └──────────────┬───────────────┘
-                                        │
-                                        ▼ [Stage 1: Processing]
-                         ┌──────────────────────────────┐
                          │  deduplicate_telemetry.py    │
-                         │  - Chronological dedup       │
+                         │  - Chronological dedup       │ [Stage 1: Processing]
                          │  - Isolates latest state     │
                          └──────────────┬───────────────┘
                                         │
                                         ▼ [Intermediate: telemetry_deduplicated.csv]
                          ┌──────────────────────────────┐
+                         │  DATA DIODE / SECURE MEDIA   │ [Stage 2: One-way Dara transfer]
+                         │  - One-way compliance CSV    │
+                         └──────────────┬───────────────┘
+                                        │
+                                        ▼ 
+                         ┌──────────────────────────────┐
                          │   evaluate_compliance.py     │
                          │  - Loads Subscriptions       │
-                         │    inventory & lifecycles    │
+                         │    inventory & lifecycles    │ [Stage 3: Compliance]
                          │  - Baremetal vs Virtualized  │
                          │  - Calculates Subscription   │
                          │    GAPs                      │
@@ -495,27 +495,34 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          └── telemetry_2026-07-12.log (Consolidated multi-cluster daily log)
          ~~~
       
-- Two-Stage Processing Pipeline
-   - To process raw logs into a finalized compliance audit report, the ingestion hub splits operations into two distinct, modular scripts:
+- Three-Stage Processing Pipeline:
+   - To process raw logs into a finalized compliance audit report, the ingestion hub splits operations into three distinct, modular stages:
 
       ~~~
       ┌────────────────────────────────────────────────────────┐
-      │ 1. DEDUPLICATION (deduplicate_telemetry.py)            │
+      │ 1. DEDUPLICATION (deduplicate_telemetry.py)            │ [Stage 1: Processing]
       │    Parses daily raw .log files and isolates latest      │
       │    state per cluster.                                  │
       └──────────────────────────┬─────────────────────────────┘
                                  │
-                                 ▼ [telemetry_deduplicated.csv] (Clean raw format)
+                                 ▼ [Intermediate: telemetry_deduplicated.csv]
       ┌────────────────────────────────────────────────────────┐
-      │ 2. COMPLIANCE & GAP ANALYSIS (evaluate_compliance.py)  │
-      │    Loads subscriptions, lifecycles, maps baremetal vs   │
-      │    virtualized metrics, and generates gap matrices.      │
+      │ 2. DATA DIODE / SECURE MEDIA                           │ [Stage 2: One-way Data Transfer]
+      │    Unidirectional gateway for exporting the clean      │
+      │    intermediate CSV to the compliance audit zone.      │
       └──────────────────────────┬─────────────────────────────┘
                                  │
-                                 ▼ [master_compliance.csv] (Final tabular repo
+                                 ▼ [Transferred: telemetry_deduplicated.csv]
+      ┌────────────────────────────────────────────────────────┐
+      │ 3. COMPLIANCE & GAP ANALYSIS (evaluate_compliance.py)  │ [Stage 3: Compliance]
+      │    Loads subscription inventories, lifecycles, maps    │
+      │    baremetal vs virtual nodes, and calculates GAPs.    │
+      └──────────────────────────┬─────────────────────────────┘
+                                 │
+                                 ▼ [Final Output: master_compliance.csv]
       ~~~
 
-      - Telemetry Deduplication (deduplicate_telemetry.py)
+      - Stage 1: Processing - Telemetry Deduplication (deduplicate_telemetry.py)
       
          - A scheduled cron job or manual trigger executes the deduplication script. 
          - It parses raw telemetry entries, discarding older historical updates to retain only the latest valid state for each unique Cluster_ID. 
@@ -546,21 +553,35 @@ When operating multiple disconnected clusters across an enterprise, managing dis
               --output OUTPUT  Path to the output deduplicated raw file
             ~~~
 
+      - Stage 2: One-way Data Transfer - Data Diode / Secure Media
 
-      - Compliance & Gap Evaluation (evaluate_compliance.py)
+         - Physically isolates the production ingestion environment from the compliance evaluation systems.
 
-         -The evaluation script consumes the deduplicated output of Stage A.
+         - Only the deduplicated, pre-filtered telemetry_deduplicated.csv is allowed to traverse the secure boundary.
+
+         - Ensures that the target audit zone (Stage 3) has zero inbound network access back to the active OpenShift clusters.
+
+
+      - Stage 3: Compliance -Compliance & Gap Evaluation (evaluate_compliance.py)
+
+         - The evaluation script consumes the deduplicated output of Stage A.
+         
          - It correlates raw topology with OCP version support windows and active purchase contracts to output the finalized audit report.
          
          - Infrastructure Core Sizing: 
+         
             - If a cluster platform is flagged as Baremetal, resources are evaluated under TOTAL_PHYSICAL_CPU_CORES and subscription usage is computed as Cores / 2. 
+            
             - All other platforms default to virtualized virtualization environments where core-counts are routed to TOTAL_VIRTUAL_VCPUS and mapped as vCPUs / 4.
             
-         - Target Filtering: 
+         - Target Filtering:
+        
             - Skips hosted instances (e.g., aws, aro, azure) and filters infrastructure, master, and control-plane node allocations from subscription metrics for clusters larger than 3 nodes.
             
-         - Financial Gap Analysis: Evaluates OCP version lifecycles and appends summarized metrics highlighting overall loads, active purchase inventories, and compliance deficits (GAP rows) under standard and premium tiers.
-         
+         - Subscription Gap Analysis:
+
+            - Evaluates OCP version lifecycles and appends summarized metrics highlighting overall node loads, active subscription inventories, and compliance deficits (GAP rows) under standard and premium tiers.
+              
          - Evaluation CLI Options:
 
             ~~~
