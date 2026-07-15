@@ -447,69 +447,136 @@ When operating multiple disconnected clusters across an enterprise, managing dis
                          │ - Reassembles frames in-mem  │ 
                          └──────────────┬───────────────┘
                                         │
-                                        ▼
+                                        ▼ [Raw Consolidated Logs: telemetry_YYYY-MM-DD.log]
                          ┌──────────────────────────────┐
                          │  DATA DIODE / SECURE MEDIA   │
-                         │  - One-way compliance CSV    │
+                         │  - One-way transport zone    │
+                         └──────────────┬───────────────┘
+                                        │
+                                        ▼ [Stage 1: Processing]
+                         ┌──────────────────────────────┐
+                         │  deduplicate_telemetry.py    │
+                         │  - Chronological dedup       │
+                         │  - Isolates latest state     │
+                         └──────────────┬───────────────┘
+                                        │
+                                        ▼ [Intermediate: telemetry_deduplicated.csv]
+                         ┌──────────────────────────────┐
+                         │   evaluate_compliance.py     │
+                         │  - Loads Subscriptions       │
+                         │    inventory & lifecycles    │
+                         │  - Baremetal vs Virtualized  │
+                         │  - Calculates Subscription   │
+                         │    GAPs                      │
+                         └──────────────┬───────────────┘
+                                        │
+                                        ▼ [Final Output: master_compliance.csv]
+                         ┌──────────────────────────────┐
+                         │  COMPLIANCE AUDIT REPORT     │
+                         │  - Detailed node list        │
+                         │  - Aggregated GAP analysis   │
                          └──────────────────────────────┘
       ~~~
 
-- Centralized Aggregation & Reassembly:
+- Reassembly and Daily Logging:
 
-   - This host runs telemetry_receiver.py as a systemd daemon listening on an unprivileged port (e.g., UDP 5555).
+   - The telemetry_receiver.py daemon runs as a systemd service listening on an unprivileged port (e.g., UDP 5555).
 
-   - The daemon evaluates incoming fragmented frames against their unique Message ID in memory using a thread-safe session map to prevent race conditions.
+   - The daemon evaluates incoming fragmented frames against their unique Message ID in memory using a thread-safe session map to prevent race conditions. 
+   - Once all expected frames for a specific payload arrive, the daemon:
 
-   - Once all expected frames for a specific payload arrive, the daemon terminates the session context, decompresses the unified byte-stream, validates the HMAC-SHA256 signature, and appends the raw cleartext metrics into a central daily rolling log:
+      - Terminates the session context.
+      - Decompresses the unified byte-stream.
+      - Validates the HMAC-SHA256 signature using the shared secret salt.
+      - Appends the raw cleartext metrics into a central daily rolling log directory:
 
-      ~~~
-      /var/log/telemetry_report/
-      └── telemetry_2026-07-12.log (Consolidated multi-cluster daily log)
-      ~~~
+         ~~~
+         /var/log/telemetry_report/
+         └── telemetry_2026-07-12.log (Consolidated multi-cluster daily log)
+         ~~~
       
-- Automated Consolidation: (#---------- IN PROGRESS ----------#)
-
-   - A scheduled cron job parses the daily rolling log, deduplicates the entries by extracting the latest valid timestamp for each unique Cluster_ID, and compiles a single, unified CSV master compliance file:
+- Two-Stage Processing Pipeline
+   - To process raw logs into a finalized compliance audit report, the ingestion hub splits operations into two distinct, modular scripts:
 
       ~~~
-      H,999924f5-4252-4883-b587-01110c52ef2f,4,4.20.27,4.19.30,2026-01-15 09:00:00 UTC,None,2026-07-14 15:30:00 UTC,amd64
-      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-01,control-plane master,40,true
-      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-02,control-plane master,40,true
-      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-03,worker,50,true
-      N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-04,worker,50,true
-      R,UiwxPTQuMjAuMjcsMj00LjE5LjMw
-      T,token-hist-jul
-      H,aaaa24f5-4252-4883-b587-01110c52ef2f,6,4.20.27,4.19.30,2026-06-30 13:57:58 UTC,None,2026-07-14 13:58:00 UTC,amd64
-      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-master-01,control-plane master,40,true
-      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-master-02,control-plane master,40,true
-      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-master-03,control-plane master,40,true
-      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-worker-01,worker,50,true
-      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-worker-02,worker,50,true
-      N,aaaa24f5-4252-4883-b587-01110c52ef2f,prod-worker-04,worker,50,true
-      R,UiwxPTQuMjAuMjcsMj00LjE5LjMw
+      ┌────────────────────────────────────────────────────────┐
+      │ 1. DEDUPLICATION (deduplicate_telemetry.py)            │
+      │    Parses daily raw .log files and isolates latest      │
+      │    state per cluster.                                  │
+      └──────────────────────────┬─────────────────────────────┘
+                                 │
+                                 ▼ [telemetry_deduplicated.csv] (Clean raw format)
+      ┌────────────────────────────────────────────────────────┐
+      │ 2. COMPLIANCE & GAP ANALYSIS (evaluate_compliance.py)  │
+      │    Loads subscriptions, lifecycles, maps baremetal vs   │
+      │    virtualized metrics, and generates gap matrices.      │
+      └──────────────────────────┬─────────────────────────────┘
+                                 │
+                                 ▼ [master_compliance.csv] (Final tabular repo
       ~~~
 
-  - Deduplication arguments supported
-  
-     ~~~
-     usage: deduplicate_telemetry.py [-h] [--start START] [--end END] [--months-back MONTHS_BACK] [--last-day] [--output OUTPUT]
-
-     Deduplica i log di telemetria e genera il file master.
-
-     options:
-       -h, --help                   Show this help message and exit
-       --start START                Data inizio (YYYY-MM-DD)
-       --end END                    Data fine (YYYY-MM-DD)
-       --months-back MONTHS_BACK    Elabora i dati partendo da N mesi fa rispetto al mese attuale
-       --last-day                   Elabora solo l'ultimo giorno disponibile
-       --output OUTPUT              Percorso del file di output personalizzato
-     ~~~
-
-  
+      - Telemetry Deduplication (deduplicate_telemetry.py)
       
-## Data Diode or Secure Media Transfer: 
-   - The finalized CSV compliance report is then transferred out of the isolated zone via a unidirectional hardware data diode or a secure media transfer protocol, guaranteeing strict one-way data movement without allowing inbound network access.
+         - A scheduled cron job or manual trigger executes the deduplication script. 
+         - It parses raw telemetry entries, discarding older historical updates to retain only the latest valid state for each unique Cluster_ID. 
+         - It compiles an intermediate, clean raw CSV file:
 
+            ~~~
+            H,999924f5-4252-4883-b587-01110c52ef2f,4,4.20.27,4.19.30,2026-01-15 09:00:00 UTC,None,2026-07-14 15:30:00 UTC,amd64
+            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-01,control-plane master,40,true
+            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-02,control-plane master,40,true
+            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-03,worker,50,true
+            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-04,worker,50,true
+            R,UiwxPTQuMjAuMjcsMj00LjE5LjMw
+            T,token-hist-jul
+            ~~~
+
+         - Deduplication CLI Options:
+
+            ~~~
+            usage: deduplicate_telemetry.py [-h] [--start START] [--end END] [--last-day] [--output OUTPUT]
+
+            Deduplicate raw telemetry log streams.
+
+            optional arguments:
+              -h, --help       show this help message and exit
+              --start START    Start Date (YYYY-MM-DD) to begin log selection
+              --end END        End Date (YYYY-MM-DD) to end log selection
+              --last-day       Process only the latest available log file
+              --output OUTPUT  Path to the output deduplicated raw file
+            ~~~
+
+
+      - Compliance & Gap Evaluation (evaluate_compliance.py)
+
+         -The evaluation script consumes the deduplicated output of Stage A.
+         - It correlates raw topology with OCP version support windows and active purchase contracts to output the finalized audit report.
+         
+         - Infrastructure Core Sizing: 
+            - If a cluster platform is flagged as Baremetal, resources are evaluated under TOTAL_PHYSICAL_CPU_CORES and subscription usage is computed as Cores / 2. 
+            - All other platforms default to virtualized virtualization environments where core-counts are routed to TOTAL_VIRTUAL_VCPUS and mapped as vCPUs / 4.
+            
+         - Target Filtering: 
+            - Skips hosted instances (e.g., aws, aro, azure) and filters infrastructure, master, and control-plane node allocations from subscription metrics for clusters larger than 3 nodes.
+            
+         - Financial Gap Analysis: Evaluates OCP version lifecycles and appends summarized metrics highlighting overall loads, active purchase inventories, and compliance deficits (GAP rows) under standard and premium tiers.
+         
+         - Evaluation CLI Options:
+
+            ~~~
+            Usage: evaluate_compliance.py [-h] [--input INPUT] [--output OUTPUT] [--subscriptions SUBSCRIPTIONS] [--lifecycle LIFECYCLE] [--start START] [--end END]
+
+            Evaluate cluster capacity license compliance and resource gaps.
+            
+            optional arguments:
+              -h, --help                     show this help message and exit
+              --input INPUT                  Path to the deduplicated raw telemetry file
+              --output OUTPUT                 Path to write the final compliance CSV report
+              --subscriptions SUBSCRIPTIONS  Path to customer subscription file
+              --lifecycle LIFECYCLE          Path to OpenShift lifecycle matrix mapping
+              --start START                  Start Date (YYYY-MM-DD) for active EUS calculations
+              --end END                      End Date (YYYY-MM-DD) for active EUS calcula
+            ~~~      
 
 ## Custer Size Operator Installation:
 
