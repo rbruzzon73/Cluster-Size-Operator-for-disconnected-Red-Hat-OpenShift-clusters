@@ -915,39 +915,67 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
    - evaluate_compliance.py syntax
 
-      ~~~
-      $ python3 evaluate_compliance.py --help
-      usage: evaluate_compliance.py [-h] [--input INPUT] [--output OUTPUT] [--subscriptions SUBSCRIPTIONS] [--lifecycle LIFECYCLE] [--start START] [--end END]
+       ~~~
+       $ python3 evaluate_compliance.py --help
+       usage: evaluate_compliance.py [-h] [--input INPUT] [--output OUTPUT] [--subscriptions SUBSCRIPTIONS] [--lifecycle LIFECYCLE] [--start START] [--end END]
 
-      Evaluate cluster capacity license compliance and resource gaps.
+       Evaluate cluster capacity license compliance and resource gaps.
 
-      optional arguments:
-        -h, --help                         show this help message and exit
-        --input INPUT                      Path to the deduplicated raw telemetry file
-        --output OUTPUT                    Path to write the final compliance CSV report
-        --subscriptions SUBSCRIPTIONS      Path to customer subscription file
-        --lifecycle LIFECYCLE              Path to OpenShift lifecycle matrix mapping
-        --start START                      Start Date (YYYY-MM-DD) for active EUS calculations
-        --end END                         End Date (YYYY-MM-DD) for active EUS calculations
-      ~~~
+       optional arguments:
+         -h, --help                         show this help message and exit
+         --input INPUT                      Path to the deduplicated raw telemetry file
+         --output OUTPUT                    Path to write the final compliance CSV report
+         --subscriptions SUBSCRIPTIONS      Path to customer subscription file
+         --lifecycle LIFECYCLE              Path to OpenShift lifecycle matrix mapping
+         --start START                      Start Date (YYYY-MM-DD) for active EUS calculations
+         --end END                         End Date (YYYY-MM-DD) for active EUS calculations
+       ~~~
 
-   - Example of subscription file (subscriptions.txt) content:
+       - Example of subscription file (subscriptions.txt) content:
 
-      ~~~
-      premium_s390x_subscriptions=36
-      standard_s390x_subscriptions=18
-      premium_ocp_subscriptions=985
-      standard_ocp_subscriptions=917
-      standard_ocp_term_1=693
-      standard_ocp_term_2=100
-      standard_ocp_term_3=200
-      premium_ocp_term_2=1
-      premium_ocp_term_3=1
-      ~~~
+       ~~~
+       premium_s390x_subscriptions=36
+       standard_s390x_subscriptions=18
+       premium_ocp_subscriptions=985
+       standard_ocp_subscriptions=917
+       standard_ocp_term_1=693
+       standard_ocp_term_2=100
+       standard_ocp_term_3=200
+       premium_ocp_term_2=1
+       premium_ocp_term_3=1
+       ~~~
 
-  - How to genare a Red Hat OpenShift life cycle file (ocp_lifecycle.csv):
+       - How to genare a Red Hat OpenShift life cycle file (ocp_lifecycle.csv):
 
-  
+          - The creation of `ocp_lifecycle.csv` can be automated using the following steps:
+
+             - Fetch the lifecycle data from access.redhat.com and save it as a JSON file:
+
+                ~~~
+                $ curl -L -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" -o ocp_lifecycle-orig.json "https://access.redhat.com/product-life-cycles/api/v1/products?name=Red%20Hat%20OpenShift%20Container%20Platform"
+
+                % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+               100  41973 100  41973   0      0 147.6k      0                              0
+               ~~~
+
+          - Parse the JSON data, extract the required support phases, and format it into a CSV file with headers:
+
+             ~~~
+             $ jq -r '
+               .data[0].versions[] | 
+               select(.name | startswith("4.")) |
+               [
+                 .name,
+                 (.phases[] | select(.name == "Extended update support") | if .start_date == "N/A" then "" else .start_date[:10] end),
+                 (.phases[] | select(.name == "Extended update support") | if .end_date == "N/A" then "" else .end_date[:10] end),
+                 (.phases[] | select(.name == "Extended update support Term 2") | if .start_date == "N/A" then "" else .start_date[:10] end),
+                 (.phases[] | select(.name == "Extended update support Term 2") | if .end_date == "N/A" then "" else .end_date[:10] end),
+                 (.phases[] | select(.name == "Extended update support Term 3") | if .start_date == "N/A" then "" else .start_date[:10] end),
+                 (.phases[] | select(.name == "Extended update support Term 3") | if .end_date == "N/A" then "" else .end_date[:10] end)
+               ] | @csv
+             ' ocp_lifecycle-orig.json | tr -d '"' | sed '1i major_minor,t1_start,t1_end,t2_start,t2_end,t3_start,t3_end' > ~/ocp_lifecycle.csv
+             ~~~
 
 
    
