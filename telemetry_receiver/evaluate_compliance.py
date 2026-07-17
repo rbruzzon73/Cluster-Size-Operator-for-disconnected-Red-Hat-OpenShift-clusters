@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-# evaluate_compliance.py
 import os
 import argparse
 import csv
 import math
+import base64
 from datetime import datetime, date
 
 DEFAULT_INPUT_FILE = "/var/log/telemetry_report/telemetry_deduplicated.csv"
@@ -29,7 +29,7 @@ def load_subscriptions(filepath):
         "premium_ocp_term_2": 0, "premium_ocp_term_3": 0
     }
     if not filepath or not os.path.exists(filepath):
-        print(f"[WARNING] Subscription file {filepath} not found.")
+        print(f"[WARNING] Subscription file {filepath} not found. Setting counts to 0.")
         return subs
     with open(filepath, 'r') as f:
         for line in f:
@@ -48,7 +48,7 @@ def load_subscriptions(filepath):
 def load_lifecycle(filepath):
     lifecycle = {}
     if not filepath or not os.path.exists(filepath):
-        print(f"[WARNING] Lifecycle file {filepath} not found.")
+        print(f"[WARNING] Lifecycle file {filepath} not found. Disabling EUS calculations.")
         return lifecycle
     with open(filepath, 'r') as f:
         reader = csv.DictReader(f)
@@ -93,12 +93,14 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
     r_end = end_date if end_date else date.today()
 
     if not os.path.exists(input_file):
-        print(f"[ERROR] Input file {input_file} missing.")
+        print(f"[ERROR] Deduplicated input file {input_file} missing.")
         return
 
     latest_headers = {}
     latest_nodes = {}
+    cluster_versions = {}
 
+    print(f"Reading deduplicated intermediate file: {input_file}")
     with open(input_file, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -107,25 +109,23 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
             parts = line.split(',')
             record_type = parts[0]
 
-            # In accordance with First & Third Request:
-            # H, <Cluster_ID>, <Node_Count>, <Support_Level>, <Init_Epoch>, <Platform>, <Current_Epoch_Token>, <Arch>
             if record_type == 'H' and len(parts) >= 8:
                 cluster_id = parts[1]
                 platform = parts[5].strip().lower()
-                support_tier = parts[3].strip().upper() # Propagated dynamic Support level
-
+                support_tier = parts[3].strip().upper()
+                
                 if platform in ['aws', 'aro', 'azure']:
                     continue
 
                 latest_headers[cluster_id] = {
                     "cluster_id": cluster_id,
                     "platform": clean_val(parts[5]),
-                    "cluster_version": "NotAvailable", # Handled via R records sequence mapping
+                    "cluster_version": "4.20", 
                     "cluster_initial_version": "NotAvailable",
                     "cluster_node_count": int(parts[2]) if parts[2].isdigit() else 0,
-                    "cluster_installed_at": clean_val(parts[4]),
-                    "support": support_tier, # Dynamic tier maps directly to report Support column
-                    "last_update_received": "NotAvailable"
+                    "cluster_installed_at": clean_val(parts[4]), # Reads converted string directly
+                    "support": support_tier,
+                    "last_update_received": clean_val(parts[6])  # Reads converted string directly
                 }
                 latest_nodes[cluster_id] = []
 
@@ -133,6 +133,7 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 cluster_id = parts[1]
                 if cluster_id not in latest_headers:
                     continue
+                
                 latest_nodes[cluster_id].append({
                     "hostname": clean_val(parts[2]),
                     "roles": clean_val(parts[3]),
@@ -141,6 +142,25 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                     "memory": "NotAvailable"
                 })
 
+            elif record_type == 'R' and len(parts) >= 2:
+                if latest_headers:
+                    last_cluster_id = list(latest_headers.keys())[-1]
+                    try:
+                        decoded_r = base64.b64decode(parts[1]).decode('utf-8')
+                        r_parts = decoded_r.split(',')
+                        version_map = {}
+                        for item in r_parts:
+                            if '=' in item:
+                                k, v = item.split('=', 1)
+                                version_map[k.strip()] = v.strip()
+                        
+                        cluster_versions[last_cluster_id] = {
+                            "current": version_map.get("1", "4.20"),
+                            "initial": version_map.get("2", "NotAvailable")
+                        }
+                    except Exception:
+                        pass
+
     evaluated_rows = []
 
     for cluster_id in sorted(latest_headers.keys()):
@@ -148,9 +168,12 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
         node_count = h_data["cluster_node_count"]
         nodes = latest_nodes.get(cluster_id, [])
 
-        # In this simplified baseline, we default major_minor to "4.20" 
-        # (This can be dynamically parsed from R record maps if available)
-        major_minor = "4.20"
+        if cluster_id in cluster_versions:
+            h_data["cluster_version"] = cluster_versions[cluster_id]["current"]
+            h_data["cluster_initial_version"] = cluster_versions[cluster_id]["initial"]
+
+        ver_parts = h_data["cluster_version"].split('.')
+        major_minor = f"{ver_parts[0]}.{ver_parts[1]}" if len(ver_parts) >= 2 else "4.20"
 
         for node in nodes:
             roles = node["roles"].lower()
@@ -221,6 +244,7 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 "is_grand_total": 0
             })
 
+    print(f"Writing final compliance matrix report to: {output_file}")
     with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(CSV_HEADER)
@@ -240,7 +264,6 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
 
         grand_totals = {}
         for arch, supp in aggr_groups:
-            # Filter matches both architecture and dynamically assigned cluster support tier
             filtered = [r for r in evaluated_rows if r["node_architecture"] == arch and r["support"] == supp]
             tot_cores = sum(r["total_physical_cpu_cores"] for r in filtered)
             tot_vcpus = sum(r["total_virtual_vcpus"] for r in filtered)
@@ -299,15 +322,20 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 None, None, None, gap_phys, 0, gap_t1, gap_t2, gap_t3, 0, 0, 0, 3
             ])
 
-    print("Compliance and subscription GAP metrics calculated successfully!")
+    print("Compliance metrics and license gaps computed successfully!")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate cluster capacity subscription compliance.")
-    parser.add_argument("--input", default=DEFAULT_INPUT_FILE, help="Path to raw telemetry file")
-    parser.add_argument("--output", default=DEFAULT_MASTER_FILE, help="Path to write final master compliance CSV")
-    parser.add_argument("--subscriptions", default="subscriptions.txt", help="Path to subscription inventory")
-    parser.add_argument("--lifecycle", default="ocp_lifecycle.csv", help="Path to lifecycle mapping")
-    parser.add_argument("--start", help="Start Date (YYYY-MM-DD)", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
-    parser.add_argument("--end", help="End Date (YYYY-MM-DD)", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
+    parser = argparse.ArgumentParser(description="Evaluate cluster capacity license compliance and resource gaps.")
+    parser.add_argument("--input", default=DEFAULT_INPUT_FILE, help="Path to the deduplicated raw telemetry file")
+    parser.add_argument("--output", default=DEFAULT_MASTER_FILE, help="Path to write the final compliance CSV report")
+    parser.add_argument("--subscriptions", default="subscriptions.txt", help="Path to customer subscription file")
+    parser.add_argument("--lifecycle", default="ocp_lifecycle.csv", help="Path to OpenShift lifecycle matrix mapping")
+    parser.add_argument("--start", help="Start Date (YYYY-MM-DD) for active EUS calculations", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
+    parser.add_argument("--end", help="End Date (YYYY-MM-DD) for active EUS calculations", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
+    
     args = parser.parse_args()
-    run_evaluation(args.input, args.output, args.subscriptions, args.lifecycle, args.start, args.end)
+    run_evaluation(
+        input_file=args.input, output_file=args.output,
+        subs_file=args.subscriptions, lifecycle_file=args.lifecycle,
+        start_date=args.start, end_date=args.end
+    )

@@ -1,0 +1,191 @@
+function applyOcpConditionalLayout() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  
+  var totalRows = sheet.getLastRow();
+  var totalColumns = sheet.getLastColumn(); 
+  if (totalRows < 1) return;
+
+  // 1. FORMAT ROW 1: White text on "Dark Cornflower Blue 2" (#1155cc)
+  var headerRange = sheet.getRange(1, 1, 1, totalColumns);
+  headerRange.setBackground("#1155cc") 
+             .setFontColor("#ffffff")
+             .setFontWeight("bold");
+
+  // 2. CONVERT COLUMN H LINKS TO PLAIN TEXT
+  if (totalRows > 1) {
+    var colHRange = sheet.getRange(2, 8, totalRows - 1, 1); 
+    var colHValues = colHRange.getValues();
+    var cleanRichTextValues = [];
+    
+    for (var i = 0; i < colHValues.length; i++) {
+      var rawText = colHValues[i][0].toString();
+      var cleanTextObject = SpreadsheetApp.newRichTextValue()
+                                         .setText(rawText) 
+                                         .build();
+      cleanRichTextValues.push([cleanTextObject]);
+    }
+    colHRange.setRichTextValues(cleanRichTextValues);
+    colHRange.setFontColor("#000000"); 
+    colHRange.setFontLine("none");     
+  }
+
+  // 3. DEFINE CONDITIONAL LABEL MATCHING GROUPS
+  var greenLabels = [
+    "AMD64 GRAND TOTAL LOAD - NO SUPPORT DEFINED", "AMD64 GRAND TOTAL LOAD - PREMIUM", "AMD64 GRAND TOTAL LOAD - STANDARD",
+    "s390x GRAND TOTAL LOAD - NO SUPPORT DEFINED", "s390x GRAND TOTAL LOAD - PREMIUM", "s390x GRAND TOTAL LOAD - STANDARD"
+  ];
+
+  var purpleLabels = [
+    "AMD64 SUBSCRIPTION AVAILABLE - PREMIUM", "AMD64 SUBSCRIPTION AVAILABLE - STANDARD",
+    "s390x SUBSCRIPTION AVAILABLE - PREMIUM", "s390x SUBSCRIPTION AVAILABLE - STANDARD"
+  ];
+
+  var yellowLabels = [
+    "GAP AMD64 SUBSCRIPTIONS - NO SUPPORT DEFINED", "GAP AMD64 SUBSCRIPTIONS - PREMIUM", "GAP AMD64 SUBSCRIPTIONS - STANDARD",
+    "GAP s390x SUBSCRIPTIONS - NO SUPPORT DEFINED", "GAP s390x SUBSCRIPTIONS - PREMIUM", "GAP s390x SUBSCRIPTIONS - STANDARD"
+  ];
+
+  // 4. --- CLUSTER-LEVEL CHRONOLOGICAL FIFO POOL ENGINE ---
+  var allRowsData = sheet.getRange(1, 1, totalRows, totalColumns).getValues();
+  
+  // Track inventory ceilings parsed from purple rows
+  var pools = {
+    "AMD64_PREMIUM": 0, "AMD64_STANDARD": 0, "AMD64_NO SUPPORT DEFINED": 0,
+    "s390x_PREMIUM": 0, "s390x_STANDARD": 0, "s390x_NO SUPPORT DEFINED": 0
+  };
+
+  for (var r = 1; r < totalRows; r++) {
+    var cId = allRowsData[r][0].toString().trim();
+    if (purpleLabels.indexOf(cId) !== -1) {
+      var arch = cId.indexOf("AMD64") !== -1 ? "AMD64" : "s390x";
+      var supp = cId.indexOf("PREMIUM") !== -1 ? "PREMIUM" : "STANDARD";
+      pools[arch + "_" + supp] = Number(allRowsData[r][14]) || 0; // Col O (Index 14)
+    }
+  }
+
+  // Group raw host data into unique cluster objects
+  var clustersMap = {};
+  for (var r = 1; r < totalRows; r++) {
+    var cId = allRowsData[r][0].toString().trim();
+    if (cId && greenLabels.indexOf(cId) === -1 && purpleLabels.indexOf(cId) === -1 && yellowLabels.indexOf(cId) === -1) {
+      
+      var arch = allRowsData[r][9].toString().trim();       // Col J (Index 9)
+      var supp = allRowsData[r][6].toString().trim();       // Col G (Index 6)
+      var installDate = new Date(allRowsData[r][5]) || new Date(0); // Col F (Index 5)
+      var physCost = Number(allRowsData[r][14]) || 0;        // Col O (Index 14)
+      var virtCost = Number(allRowsData[r][15]) || 0;        // Col P (Index 15)
+      
+      if (!clustersMap[cId]) {
+        clustersMap[cId] = {
+          clusterId: cId,
+          installedAt: installDate,
+          support: supp,
+          architecture: arch,
+          totalSubRequirement: 0,
+          rowIndices: []
+        };
+      }
+      
+      clustersMap[cId].totalSubRequirement += (physCost + virtCost);
+      clustersMap[cId].rowIndices.push(r + 1); // Save target rows to color later
+    }
+  }
+
+  // Convert map to array and sort by oldest install timestamp
+  var orderedClusters = [];
+  for (var id in clustersMap) {
+    orderedClusters.push(clustersMap[id]);
+  }
+  orderedClusters.sort(function(a, b) { return a.installedAt - b.installedAt; });
+
+  // Draw down pool balances and determine cluster color status mapping
+  var runningTotals = {
+    "AMD64_PREMIUM": 0, "AMD64_STANDARD": 0, "AMD64_NO SUPPORT DEFINED": 0,
+    "s390x_PREMIUM": 0, "s390x_STANDARD": 0, "s390x_NO SUPPORT DEFINED": 0
+  };
+  
+  var clusterColorsMap = {};
+
+  for (var i = 0; i < orderedClusters.length; i++) {
+    var cluster = orderedClusters[i];
+    var poolKey = cluster.architecture + "_" + cluster.support;
+    
+    var startAllocation = runningTotals[poolKey];
+    runningTotals[poolKey] += cluster.totalSubRequirement;
+    var endAllocation = runningTotals[poolKey];
+    
+    var maxAllowed = pools[poolKey];
+    var statusColor = "RED";
+
+    if (endAllocation <= maxAllowed) {
+      statusColor = "GREEN";
+    } else if (startAllocation < maxAllowed && endAllocation > maxAllowed) {
+      statusColor = "YELLOW";
+    }
+
+    // Map calculated status out to every row matching this unique cluster
+    for (var j = 0; j < cluster.rowIndices.length; j++) {
+      clusterColorsMap[cluster.rowIndices[j]] = statusColor;
+    }
+  }
+
+  // 5. GLOBAL ALIGNMENTS & BORDERS FOR ALL DATA 
+  sheet.getRange(1, 1, totalRows, totalColumns).setHorizontalAlignment("left");
+  sheet.getRange(1, 1, totalRows, totalColumns)
+       .setBorder(true, true, true, true, true, true, "#cccccc", SpreadsheetApp.BorderStyle.SOLID);
+
+  // 6. LOOP AND APPLY COLOR BLOCKS + MERGES ROW BY ROW
+  for (var r = 1; r < totalRows; r++) {
+    var cellValue = allRowsData[r][0].toString().trim();
+    if (!cellValue) continue;
+
+    var actualRowIndex = r + 1;
+    var rowRange = sheet.getRange(actualRowIndex, 1, 1, totalColumns);
+
+    // Summary Rows Coloring
+    if (greenLabels.indexOf(cellValue) !== -1) {
+      rowRange.setBackground("#d9ead3"); // Light Green 3
+      sheet.getRange(actualRowIndex, 1).setFontWeight("bold");
+    } 
+    else if (purpleLabels.indexOf(cellValue) !== -1) {
+      rowRange.setBackground("#d9d2e9"); // Light Purple 3
+      sheet.getRange(actualRowIndex, 1).setFontWeight("bold");
+    } 
+    else if (yellowLabels.indexOf(cellValue) !== -1) {
+      rowRange.setBackground("#fff2cc"); // Light Yellow 3
+      sheet.getRange(actualRowIndex, 1).setFontWeight("bold");
+    }
+    // Individual Cluster Node Dynamic Colors (Applying Cluster-Level Context)
+    else if (clusterColorsMap[actualRowIndex]) {
+      var status = clusterColorsMap[actualRowIndex];
+      if (status === "GREEN") {
+        rowRange.setBackground("#e2f0d9"); // Soft Muted Green
+      } else if (status === "YELLOW") {
+        rowRange.setBackground("#fff2cc"); // Soft Warning Yellow
+      } else if (status === "RED") {
+        rowRange.setBackground("#fce4d6"); // Soft Alert Red
+      }
+    }
+
+    // --- CELL MERGING LOGIC ONLY FOR AMD64 COLUMNS O & P (15 & 16) ---
+    var isAmd64Summary = (cellValue.indexOf("AMD64") !== -1 && (purpleLabels.indexOf(cellValue) !== -1 || yellowLabels.indexOf(cellValue) !== -1));
+
+    if (isAmd64Summary) {
+      var targetMergeRange = sheet.getRange(actualRowIndex, 15, 1, 2);
+      sheet.getRange(actualRowIndex, 16).setValue("");
+      targetMergeRange.mergeAcross();
+      targetMergeRange.setHorizontalAlignment("center");
+    }
+  }
+
+  // 7. FREEZE ROW 1 AND COLUMN 1
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(1);
+
+  // 8. AUTO-RESIZE WITH CELL CUSHION PADDING
+  sheet.autoResizeColumns(1, totalColumns);
+  for (var col = 1; col <= totalColumns; col++) {
+    var currentWidth = sheet.getColumnWidth(col);
+    sheet.setColumnWidth(col, currentWidth + 20); 
+  }
+}
