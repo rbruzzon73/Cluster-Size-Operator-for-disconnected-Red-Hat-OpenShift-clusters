@@ -6,41 +6,43 @@ import (
 
 // ClusterSizeConfigSpec defines the desired state of ClusterSizeConfig
 type ClusterSizeConfigSpec struct {
-	// CheckInterval defines how frequently the operator re-evaluates cluster metrics and ships UDP payloads (e.g., "30s", "5m").
-	CheckInterval string `json:"check_interval"`
+	// +kubebuilder:validation:Required
+	CheckInterval string `json:"checkInterval"`
 
-	// RemoteIp specifies the target destination IPv4 address of the remote VM telemetry collector receiver.
-	RemoteIp string `json:"remote_ip"`
+	LogMaxRotations int `json:"logMaxRotations,omitempty"`
+	LogMaxSizeBytes int `json:"logMaxSizeBytes,omitempty"`
 
-	// RemoteUdpPort specifies the destination network UDP socket port on the remote VM receiver listening for payload streams.
-	RemoteUdpPort int `json:"remote_udp_port"`
+	// +kubebuilder:validation:Required
+	RemoteIp string `json:"remoteIp"`
 
-	// Secret points to the Name of the Corev1 Secret inside the namespace containing the mandatory 'HASH_SALT' cryptographic key.
+	// +kubebuilder:validation:Required
+	RemoteUdpPort int `json:"remoteUdpPort"`
+
+	// +kubebuilder:validation:Required
 	Secret string `json:"secret"`
 
-	// Suspend flips the operational state of the controller loop. When set to true, active collection deployments are completely torn down.
-	// +optional
 	Suspend bool `json:"suspend,omitempty"`
 
-	// LogMaxRotations sets the maximum number of historical backup log archive files to retain.
-	// +optional
-	// +kubebuilder:default=10
-	LogMaxRotations int `json:"log_max_rotations,omitempty"`
+	// IsBareMetal specifies whether the cluster runs on raw physical hardware.
+	// This parameter acts as a fallback for UPI bare metal configurations.
+	// +kubebuilder:validation:Required
+	IsBareMetal bool `json:"isBareMetal"`
 
-	// LogMaxSizeCcBytes defines the hard file-size cap (in bytes) before triggering a rotation split.
-	// +optional
-	// +kubebuilder:default=50000
-	LogMaxSizeBytes int `json:"log_max_size_bytes,omitempty"`
+	// SubscriptionServiceLevel dictates the contract service tier associated with the cluster.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Premium;Standard
+	SubscriptionServiceLevel string `json:"subscriptionServiceLevel"`
 }
 
+// ClusterSizeConfigStatus defines the observed state of ClusterSizeConfig
 type ClusterSizeConfigStatus struct {
-	Phase            string `json:"phase,omitempty"`
-	MonitoringActive bool   `json:"monitoringActive"`
+	// Add observed state status fields here if required by your controller
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
+// ClusterSizeConfig is the Schema for the clustersizeconfigs API
 type ClusterSizeConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -49,8 +51,9 @@ type ClusterSizeConfig struct {
 	Status ClusterSizeConfigStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
+// ClusterSizeConfigList contains a list of ClusterSizeConfig
 type ClusterSizeConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

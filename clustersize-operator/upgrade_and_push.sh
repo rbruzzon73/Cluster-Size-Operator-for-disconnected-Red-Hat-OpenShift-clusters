@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Define explicit version matrices
-OLD_VER="2.0.96"
-NEW_VER="2.0.97"
+OLD_VER="2.0.101"
+NEW_VER="2.0.102"
 NAMESPACE="openshift-size-monitoring"
 
 # Ensure this line exists inside your upgrade_and_push.sh script:

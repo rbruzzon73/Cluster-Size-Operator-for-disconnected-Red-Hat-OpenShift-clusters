@@ -34,10 +34,10 @@ type ClusterSizeConfigReconciler struct {
 }
 
 const (
-	OperatorVersion = "2.10.0-multi-platform-tiering"
+	OperatorVersion = "2.9.5-dynamic-hmac-platform-clean"
 )
 
-// InstallConfig handles minimal parsing of the cluster install-config.yaml
+// Struttura di supporto per il parsing minimale dell'install-config.yaml
 type InstallConfig struct {
 	Compute []struct {
 		Platform map[string]interface{} `yaml:"platform"`
@@ -72,13 +72,13 @@ func parseIntervalToSeconds(intervalStr string) int {
 	case "m":
 		return value * 60
 	case "h":
-		return value * 33600
+		return value * 3600
 	default:
 		return 86400
 	}
 }
 
-// --- LOCAL RULES ---
+// --- REGOLE LOCALI ---
 //+kubebuilder:rbac:groups=management.example.com,resources=clustersizeconfigs,verbs=get;list;watch;create;update;patch;delete,namespace=openshift-size-monitoring
 //+kubebuilder:rbac:groups=management.example.com,resources=clustersizeconfigs/status,verbs=get;update;patch,namespace=openshift-size-monitoring
 //+kubebuilder:rbac:groups=management.example.com,resources=clustersizeconfigs/finalizers,verbs=update,namespace=openshift-size-monitoring
@@ -87,7 +87,7 @@ func parseIntervalToSeconds(intervalStr string) int {
 //+kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete,namespace=openshift-size-monitoring
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch,namespace=openshift-size-monitoring
 
-// --- GLOBAL DISCOVERY & CONFIGURATION RULES ---
+// --- REGOLE GLOBALI DI CONFIGURAZIONE & SCOPERTA ---
 //+kubebuilder:rbac:groups=config.openshift.io,resources=clusterversions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=metal3.io,resources=baremetalhosts,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=nodes;configmaps,verbs=get;list;watch
@@ -106,13 +106,13 @@ func (r *ClusterSizeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 
 	if config.Spec.Suspend {
-		logger.Info("ClusterSizeConfig reconciliation suspended. Tearing down active collection deployments...")
+		logger.Info("ClusterSizeConfig reconciliation suspended. Tearing down active collection pods...")
 		return r.teardownWorkloads(ctx, config.Namespace)
 	}
 
 	logger.Info("ClusterSizeConfig trigger detected active. Evaluating telemetry matrices...")
 
-	payload, err := r.compileTelemetryBasePayload(ctx, config)
+	payload, err := r.compileTelemetryBasePayload(ctx)
 	if err != nil {
 		logger.Error(err, "Failed payload compilation execution sequence")
 		return ctrl.Result{}, err
@@ -121,11 +121,11 @@ func (r *ClusterSizeConfigReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	return r.deployWorkloads(ctx, config, payload)
 }
 
-// determinePlatform executes hierarchical platform verification
-func (r *ClusterSizeConfigReconciler) determinePlatform(ctx context.Context, crIsBareMetal bool) string {
+// Rileva in modo deterministico il tipo di piattaforma cloud/on-premise
+func (r *ClusterSizeConfigReconciler) determinePlatform(ctx context.Context) string {
 	logger := log.FromContext(ctx)
 
-	// Check 1: Look for BareMetalHost Resources (Metal3)
+	// 1. Verifica se ci sono risorse BareMetalHost (metal3.io) nel cluster
 	bmhList := &unstructured.UnstructuredList{}
 	bmhList.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "metal3.io",
@@ -137,8 +137,10 @@ func (r *ClusterSizeConfigReconciler) determinePlatform(ctx context.Context, crI
 		return "Baremetal"
 	}
 
-	// Check 2: Parse the install-config.yaml ConfigMap
-	resolvedPlatform := "none"
+	// [CONDIZIONE BAREMETAL OPERATOR RIMOSSA]
+	// Non interroghiamo più il ClusterOperator "baremetal" poiché è sempre presente di default su OCP.
+
+	// 2. Verifica l'install-config all'interno della ConfigMap cluster-config-v1 in kube-system
 	cm := &corev1.ConfigMap{}
 	if err := r.Get(ctx, types.NamespacedName{Namespace: "kube-system", Name: "cluster-config-v1"}, cm); err == nil {
 		if rawConfig, exists := cm.Data["install-config"]; exists {
@@ -146,7 +148,7 @@ func (r *ClusterSizeConfigReconciler) determinePlatform(ctx context.Context, crI
 			if err := yaml.Unmarshal([]byte(rawConfig), &cfg); err == nil {
 				platformCandidates := []string{}
 
-				// Extract across 3 hierarchy levels in install-config
+				// Estrae dai 3 livelli dell'install-config
 				for k := range cfg.Platform {
 					platformCandidates = append(platformCandidates, k)
 				}
@@ -159,38 +161,35 @@ func (r *ClusterSizeConfigReconciler) determinePlatform(ctx context.Context, crI
 					}
 				}
 
-				// Filter out empty or "none" structures
+				// Filtra escludendo le diciture "none" o valori vuoti/strutture vuote
+				resolvedPlatform := "None"
 				for _, candidate := range platformCandidates {
 					candLower := strings.TrimSpace(strings.ToLower(candidate))
 					if candLower != "" && candLower != "none" {
+						// Trovata piattaforma specifica a priorità più alta (es: vsphere)
 						resolvedPlatform = candidate
 						break
 					}
 				}
+
+				if strings.ToLower(resolvedPlatform) == "baremetal" {
+					return "Baremetal"
+				}
+				return resolvedPlatform
 			}
 		}
 	}
 
-	// Logic execution: Use CR parameter fallback ONLY if no BareMetalHost exists AND install-config is empty/none.
-	if strings.ToLower(resolvedPlatform) == "none" {
-		if crIsBareMetal {
-			logger.Info("No automated platform metrics discovered. Fallback to CR target IsBareMetal = true: forcing Baremetal")
-			return "Baremetal"
-		}
-		return "None"
-	}
-
-	// If explicit infrastructure platforms are defined (e.g. vsphere, aws), report it
-	logger.Info(fmt.Sprintf("Discovered install-config infrastructure layer: %s", resolvedPlatform))
-	return resolvedPlatform
+	return "None"
 }
 
-func (r *ClusterSizeConfigReconciler) compileTelemetryBasePayload(ctx context.Context, config *managementv1alpha1.ClusterSizeConfig) (string, error) {
+func (r *ClusterSizeConfigReconciler) compileTelemetryBasePayload(ctx context.Context) (string, error) {
 	logger := log.FromContext(ctx)
 	clusterID, currentVer, initialVer := "unknown", "unknown", "unknown"
 	var initDateEpoch int64 = 0
 
-	detectedPlatform := r.determinePlatform(ctx, config.Spec.IsBareMetal)
+	// Rileva dinamicamente la piattaforma (Baremetal o rilevata da ConfigMap)
+	detectedPlatform := r.determinePlatform(ctx)
 
 	clusterVersion := &unstructured.Unstructured{}
 	clusterVersion.SetGroupVersionKind(schema.GroupVersionKind{
@@ -231,11 +230,8 @@ func (r *ClusterSizeConfigReconciler) compileTelemetryBasePayload(ctx context.Co
 
 	sort.Slice(nodes.Items, func(i, j int) bool { return nodes.Items[i].Name < nodes.Items[j].Name })
 
-	// Extended H Header layout incorporating dynamic Subscription Service Level
-	supportLevel := strings.ToUpper(config.Spec.SubscriptionServiceLevel)
 	var lines []string
-	lines = append(lines, fmt.Sprintf("H,%s,%d,%s,%d,%s,__CURRENT_EPOCH_TOKEN__,amd64", 
-		clusterID, len(nodes.Items), supportLevel, initDateEpoch, detectedPlatform))
+	lines = append(lines, fmt.Sprintf("H,%s,%d,1,2,%d,%s,__CURRENT_EPOCH_TOKEN__,amd64", clusterID, len(nodes.Items), initDateEpoch, detectedPlatform))
 
 	roleGroupMap := make(map[string]int)
 	roleGroupCounter := 3
@@ -297,7 +293,7 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 	if err := r.Get(ctx, client.ObjectKey{Name: "controller-manager", Namespace: config.Namespace}, managerDep); err == nil {
 		if len(managerDep.GetOwnerReferences()) > 0 {
 			finalOwnerReferences = managerDep.GetOwnerReferences()
-			logger.Info("Successfully hijacked CSV OwnerReferences from controller manager deployment context.")
+			logger.Info("OwnerReference della CSV intercettata con successo dal Deployment del manager.")
 		}
 	}
 

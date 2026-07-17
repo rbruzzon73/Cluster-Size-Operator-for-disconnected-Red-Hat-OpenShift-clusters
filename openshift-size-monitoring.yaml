@@ -18,10 +18,10 @@ metadata:
   name: clustersize-catalog
   namespace: openshift-marketplace
 spec:
-  displayName: "Custom Sizing Utilities v2.0.97"
+  displayName: "Custom Sizing Utilities v2.0.102"
   publisher: "Platform Team"
   sourceType: grpc
-  image: ghcr.io/rbruzzon73/clustersize-catalog:v2.0.97
+  image: ghcr.io/rbruzzon73/clustersize-catalog:v2.0.102
   imagePullPolicy: Always
 ---
 apiVersion: operators.coreos.com/v1alpha1
@@ -34,7 +34,7 @@ spec:
   name: clustersize
   source: clustersize-catalog
   sourceNamespace: openshift-marketplace
-  startingCSV: clustersize.v2.0.97  
+  startingCSV: clustersize.v2.0.102  
 ---
 apiVersion: v1
 kind: Secret

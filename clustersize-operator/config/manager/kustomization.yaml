@@ -9,4 +9,4 @@ resources:
 images:
 - name: controller
   newName: ghcr.io/rbruzzon73/clustersize-operator
-  newTag: v2.0.97
+  newTag: v2.0.102

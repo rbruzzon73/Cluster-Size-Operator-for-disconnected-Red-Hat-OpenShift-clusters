@@ -17,6 +17,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
+        description: ClusterSizeConfig is the Schema for the clustersizeconfigs API
         properties:
           apiVersion:
             description: |-
@@ -38,52 +39,42 @@ spec:
           spec:
             description: ClusterSizeConfigSpec defines the desired state of ClusterSizeConfig
             properties:
-              check_interval:
-                description: CheckInterval defines how frequently the operator re-evaluates
-                  cluster metrics and ships UDP payloads (e.g., "30s", "5m").
+              checkInterval:
                 type: string
-              log_max_rotations:
-                default: 10
-                description: LogMaxRotations sets the maximum number of historical
-                  backup log archive files to retain.
+              isBareMetal:
+                description: |-
+                  IsBareMetal specifies whether the cluster runs on raw physical hardware.
+                  This parameter acts as a fallback for UPI bare metal configurations.
+                type: boolean
+              logMaxRotations:
                 type: integer
-              log_max_size_bytes:
-                default: 50000
-                description: LogMaxSizeCcBytes defines the hard file-size cap (in
-                  bytes) before triggering a rotation split.
+              logMaxSizeBytes:
                 type: integer
-              remote_ip:
-                description: RemoteIp specifies the target destination IPv4 address
-                  of the remote VM telemetry collector receiver.
+              remoteIp:
                 type: string
-              remote_udp_port:
-                description: RemoteUdpPort specifies the destination network UDP socket
-                  port on the remote VM receiver listening for payload streams.
+              remoteUdpPort:
                 type: integer
               secret:
-                description: Secret points to the Name of the Corev1 Secret inside
-                  the namespace containing the mandatory 'HASH_SALT' cryptographic
-                  key.
+                type: string
+              subscriptionServiceLevel:
+                description: SubscriptionServiceLevel dictates the contract service
+                  tier associated with the cluster.
+                enum:
+                - Premium
+                - Standard
                 type: string
               suspend:
-                description: Suspend flips the operational state of the controller
-                  loop. When set to true, active collection deployments are completely
-                  torn down.
                 type: boolean
             required:
-            - check_interval
-            - remote_ip
-            - remote_udp_port
+            - checkInterval
+            - isBareMetal
+            - remoteIp
+            - remoteUdpPort
             - secret
+            - subscriptionServiceLevel
             type: object
           status:
-            properties:
-              monitoringActive:
-                type: boolean
-              phase:
-                type: string
-            required:
-            - monitoringActive
+            description: ClusterSizeConfigStatus defines the observed state of ClusterSizeConfig
             type: object
         type: object
     served: true

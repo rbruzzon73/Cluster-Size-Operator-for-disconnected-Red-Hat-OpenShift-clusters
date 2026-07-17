@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# evaluate_compliance.py
 import os
 import argparse
 import csv
@@ -22,6 +21,7 @@ CSV_HEADER = [
 ]
 
 def load_subscriptions(filepath):
+    """Loads current inventory counts from the subscriptions file."""
     subs = {
         "premium_s390x_subscriptions": 0, "standard_s390x_subscriptions": 0,
         "premium_ocp_subscriptions": 0, "standard_ocp_subscriptions": 0,
@@ -29,7 +29,7 @@ def load_subscriptions(filepath):
         "premium_ocp_term_2": 0, "premium_ocp_term_3": 0
     }
     if not filepath or not os.path.exists(filepath):
-        print(f"[WARNING] Subscription file {filepath} not found.")
+        print(f"[WARNING] Subscription file {filepath} not found. Setting counts to 0.")
         return subs
     with open(filepath, 'r') as f:
         for line in f:
@@ -46,9 +46,10 @@ def load_subscriptions(filepath):
     return subs
 
 def load_lifecycle(filepath):
+    """Maps major.minor OCP versions to their EUS phases from lifecycle CSV."""
     lifecycle = {}
     if not filepath or not os.path.exists(filepath):
-        print(f"[WARNING] Lifecycle file {filepath} not found.")
+        print(f"[WARNING] Lifecycle file {filepath} not found. Disabling EUS calculations.")
         return lifecycle
     with open(filepath, 'r') as f:
         reader = csv.DictReader(f)
@@ -66,6 +67,7 @@ def load_lifecycle(filepath):
     return lifecycle
 
 def evaluate_term(lifecycle_ref, major_minor, term_num, range_start, range_end):
+    """Checks if the evaluation range falls within an active EUS term."""
     if major_minor not in lifecycle_ref:
         return False
     ref = lifecycle_ref[major_minor]
@@ -81,11 +83,13 @@ def evaluate_term(lifecycle_ref, major_minor, term_num, range_start, range_end):
         return False
 
 def clean_val(val):
+    """Guarantees standard output format instead of empty or none entries."""
     if not val or val.strip() == "" or val.strip().lower() == "none":
         return "NotAvailable"
     return val.strip()
 
 def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_date, end_date):
+    """Computes subscription balances and EUS compliance, and builds output."""
     subs = load_subscriptions(subs_file)
     lifecycle = load_lifecycle(lifecycle_file)
 
@@ -93,12 +97,13 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
     r_end = end_date if end_date else date.today()
 
     if not os.path.exists(input_file):
-        print(f"[ERROR] Input file {input_file} missing.")
+        print(f"[ERROR] Deduplicated input file {input_file} missing. Run deduplicate script first.")
         return
 
     latest_headers = {}
     latest_nodes = {}
 
+    print(f"Reading deduplicated intermediate file: {input_file}")
     with open(input_file, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -107,25 +112,23 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
             parts = line.split(',')
             record_type = parts[0]
 
-            # In accordance with First & Third Request:
-            # H, <Cluster_ID>, <Node_Count>, <Support_Level>, <Init_Epoch>, <Platform>, <Current_Epoch_Token>, <Arch>
-            if record_type == 'H' and len(parts) >= 8:
+            if record_type == 'H' and len(parts) >= 9:
                 cluster_id = parts[1]
-                platform = parts[5].strip().lower()
-                support_tier = parts[3].strip().upper() # Propagated dynamic Support level
-
+                platform = parts[6].strip().lower()
+                
+                # Filter out hosted platforms
                 if platform in ['aws', 'aro', 'azure']:
                     continue
 
                 latest_headers[cluster_id] = {
                     "cluster_id": cluster_id,
-                    "platform": clean_val(parts[5]),
-                    "cluster_version": "NotAvailable", # Handled via R records sequence mapping
-                    "cluster_initial_version": "NotAvailable",
+                    "platform": clean_val(parts[6]),
+                    "cluster_version": clean_val(parts[3]),
+                    "cluster_initial_version": clean_val(parts[4]),
                     "cluster_node_count": int(parts[2]) if parts[2].isdigit() else 0,
-                    "cluster_installed_at": clean_val(parts[4]),
-                    "support": support_tier, # Dynamic tier maps directly to report Support column
-                    "last_update_received": "NotAvailable"
+                    "cluster_installed_at": clean_val(parts[5]),
+                    "support": "NO SUPPORT DEFINED",
+                    "last_update_received": clean_val(parts[7])
                 }
                 latest_nodes[cluster_id] = []
 
@@ -133,6 +136,7 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 cluster_id = parts[1]
                 if cluster_id not in latest_headers:
                     continue
+                
                 latest_nodes[cluster_id].append({
                     "hostname": clean_val(parts[2]),
                     "roles": clean_val(parts[3]),
@@ -148,13 +152,13 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
         node_count = h_data["cluster_node_count"]
         nodes = latest_nodes.get(cluster_id, [])
 
-        # In this simplified baseline, we default major_minor to "4.20" 
-        # (This can be dynamically parsed from R record maps if available)
-        major_minor = "4.20"
+        ver_parts = h_data["cluster_version"].split('.')
+        major_minor = f"{ver_parts[0]}.{ver_parts[1]}" if len(ver_parts) >= 2 else "NotAvailable"
 
         for node in nodes:
             roles = node["roles"].lower()
             if node_count > 3:
+                # Exclude infrastructural/management roles if cluster has more than 3 nodes
                 if "master" in roles or "control-plane" in roles or "infra" in roles:
                     continue
 
@@ -162,6 +166,7 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
             cpu_raw = node["cpu_raw"]
             is_baremetal = h_data["platform"].lower() == "baremetal"
 
+            # Compute virtual vs physical core counts
             if is_baremetal:
                 total_cores = cpu_raw
                 total_vcpus = 0
@@ -173,6 +178,7 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 total_vcpus = 0
                 total_cores = cpu_raw
 
+            # Compute subscription requirements
             if arch_group == "s390x":
                 sub_physical = cpu_raw
                 sub_virtual = 0
@@ -183,10 +189,12 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 sub_physical = 0
                 sub_virtual = math.ceil(total_vcpus / 4)
 
+            # Evaluate active EUS phase targets
             t1_active = evaluate_term(lifecycle, major_minor, 1, r_start, r_end)
             t2_active = evaluate_term(lifecycle, major_minor, 2, r_start, r_end)
             t3_active = evaluate_term(lifecycle, major_minor, 3, r_start, r_end)
 
+            # Map active EUS terms to subscription values
             eus_t1_phys = sub_physical if t1_active else 0
             eus_t2_phys = sub_physical if t2_active else 0
             eus_t3_phys = sub_physical if t3_active else 0
@@ -221,10 +229,12 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 "is_grand_total": 0
             })
 
+    print(f"Writing final compliance matrix report to: {output_file}")
     with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(CSV_HEADER)
 
+        # Write out individual node records
         for row in evaluated_rows:
             writer.writerow([
                 row["cluster_id"], row["platform"], row["cluster_version"], row["cluster_initial_version"],
@@ -236,12 +246,13 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 row["eus_t1_virt"], row["eus_t2_virt"], row["eus_t3_virt"], 0
             ])
 
+        # Define architectural support dimensions
         aggr_groups = [("AMD64", "STANDARD"), ("AMD64", "PREMIUM"), ("s390x", "STANDARD"), ("s390x", "PREMIUM")]
 
+        # SECTION 1: GRAND TOTAL LOAD
         grand_totals = {}
         for arch, supp in aggr_groups:
-            # Filter matches both architecture and dynamically assigned cluster support tier
-            filtered = [r for r in evaluated_rows if r["node_architecture"] == arch and r["support"] == supp]
+            filtered = [r for r in evaluated_rows if r["node_architecture"] == arch]
             tot_cores = sum(r["total_physical_cpu_cores"] for r in filtered)
             tot_vcpus = sum(r["total_virtual_vcpus"] for r in filtered)
             tot_phys_sub = sum(r["sub_phys"] for r in filtered)
@@ -267,6 +278,7 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 t1_phys, t2_phys, t3_phys, t1_virt, t2_virt, t3_virt, 1
             ])
 
+        # SECTION 2: SUBSCRIPTION AVAILABLE
         avail_subs = {}
         for arch, supp in aggr_groups:
             if arch == "s390x":
@@ -285,6 +297,7 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 None, None, None, avail, 0, t1, t2, t3, 0, 0, 0, 2
             ])
 
+        # SECTION 3: CALCULATED GAP
         for arch, supp in aggr_groups:
             g_tot = grand_totals[(arch, supp)]
             av = avail_subs[(arch, supp)]
@@ -299,15 +312,20 @@ def run_evaluation(input_file, output_file, subs_file, lifecycle_file, start_dat
                 None, None, None, gap_phys, 0, gap_t1, gap_t2, gap_t3, 0, 0, 0, 3
             ])
 
-    print("Compliance and subscription GAP metrics calculated successfully!")
+    print("Compliance metrics and license gaps computed successfully!")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate cluster capacity subscription compliance.")
-    parser.add_argument("--input", default=DEFAULT_INPUT_FILE, help="Path to raw telemetry file")
-    parser.add_argument("--output", default=DEFAULT_MASTER_FILE, help="Path to write final master compliance CSV")
-    parser.add_argument("--subscriptions", default="subscriptions.txt", help="Path to subscription inventory")
-    parser.add_argument("--lifecycle", default="ocp_lifecycle.csv", help="Path to lifecycle mapping")
-    parser.add_argument("--start", help="Start Date (YYYY-MM-DD)", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
-    parser.add_argument("--end", help="End Date (YYYY-MM-DD)", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
+    parser = argparse.ArgumentParser(description="Evaluate cluster capacity license compliance and resource gaps.")
+    parser.add_argument("--input", default=DEFAULT_INPUT_FILE, help="Path to the deduplicated raw telemetry file")
+    parser.add_argument("--output", default=DEFAULT_MASTER_FILE, help="Path to write the final compliance CSV report")
+    parser.add_argument("--subscriptions", default="subscriptions.txt", help="Path to customer subscription file")
+    parser.add_argument("--lifecycle", default="ocp_lifecycle.csv", help="Path to OpenShift lifecycle matrix mapping")
+    parser.add_argument("--start", help="Start Date (YYYY-MM-DD) for active EUS calculations", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
+    parser.add_argument("--end", help="End Date (YYYY-MM-DD) for active EUS calculations", type=lambda s: datetime.strptime(s, '%Y-%m-%d').date())
+    
     args = parser.parse_args()
-    run_evaluation(args.input, args.output, args.subscriptions, args.lifecycle, args.start, args.end)
+    run_evaluation(
+        input_file=args.input, output_file=args.output,
+        subs_file=args.subscriptions, lifecycle_file=args.lifecycle,
+        start_date=args.start, end_date=args.end
+    )
