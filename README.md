@@ -719,7 +719,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       - Log in to your Red Hat OpenShift web console. Navigate to Ecosystem > Software Catalog in the left-hand menu. Search for "Cluster Size Operator", click on its tile to open the detail pane, and click Install to begin the configuration.
 
       <p align="left">
-        <em><strong>Figure 1 - Red Hat OpenShift Software Catalog</strong></em><br>
+        <em><strong>Figure 2 - Red Hat OpenShift Software Catalog</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/1-SoftwareCatalog-ClusterSizeOperator-Install.png" width="850">
       </p>
       <br>
@@ -727,7 +727,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
    - Step 3: On the Operator Installation page, confirm the operator deployment in the recommended namespace: openshift-size-monitoring (Ref: Figure 2)
    
      <p align="left">
-        <em><strong>Figure 2 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
+        <em><strong>Figure 3 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/2-clustersizeoperator-installed-in-openshift-size-monitoring.png" width="850">
      </p>
      <br>
@@ -739,7 +739,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       - The Custom Resource Definitions (CRDs) are now registered, meaning your cluster's API is ready to accept configuration objects.
 
       <p align="left">
-        <em><strong>Figure 3 - Operator installed successfully</strong></em><br>
+        <em><strong>Figure 4 - Operator installed successfully</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/3-clustersizeoperator-installed.png" width="425">
       </p>
       <br>
@@ -751,7 +751,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       - This opens a user-friendly form where you can define your monitoring settings, including the check interval, remote server IP, UDP port, and target cryptographic validation secret.
 
       <p align="left">
-        <em><strong>Figure 4 - Create ClusterSizeConfig</strong></em><br>
+        <em><strong>Figure 5 - Create ClusterSizeConfig</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/4-ClusterSizeConfig-definintion.png" width="850">
       </p>
       <br>
@@ -763,7 +763,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       - This dashboard lets you track the current status and last update times for each monitoring configuration.
 
       <p align="left">
-        <em><strong>Figure 5 - ClusterSizeConfig example</strong></em><br>
+        <em><strong>Figure 6 - ClusterSizeConfig example</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/6-example-clustersizeconfigs.png" width="850">
       </p>
       <br>
@@ -781,7 +781,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          - Log limits: Define maximum file size and rotation values before saving.
 
       <p align="left">
-        <em><strong>Figure 6 - ClusterSizeConfig created</strong></em><br>
+        <em><strong>Figure 7 - ClusterSizeConfig created</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/5-configurationexample.png" width="850">
       </p>
       <br>
@@ -794,7 +794,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          - clustersize: The worker data-plane pod that collects cluster metrics, signs them securely using the key in your secret, and streams them out via UDP.
 
       <p align="left">
-        <em><strong>Figure 7 - Cluster Size Operator PODs</strong></em><br>
+        <em><strong>Figure 8 - Cluster Size Operator PODs</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/7-clustersizeconfigs-pods.png" width="425">
       </p>
       <br>
