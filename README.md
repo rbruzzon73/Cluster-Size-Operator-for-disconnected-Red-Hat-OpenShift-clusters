@@ -756,19 +756,8 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       </p>
       <br>
 
-   - Step 6: Manage Sizing Configurations (Ref: Figure 5)
-     
-      - In the ClusterSizeConfigs tab of the operator, you can view, edit, or delete existing configuration instances running in your namespace.
-        
-      - This dashboard lets you track the current status and last update times for each monitoring configuration.
 
-      <p align="left">
-        <em><strong>Figure 6 - ClusterSizeConfig example</strong></em><br>
-        <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/6-example-clustersizeconfigs.png" width="850">
-      </p>
-      <br>
-
-   - Step 7: Configure and Save Sizing Parameters (Ref: Figure 6)
+   - Step 6: Configure and Save Sizing Parameters (Ref: Figure 6)
    
       - Fill in the configuration details for your monitor:
 
@@ -779,14 +768,18 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          - Secret: Provide the name of the Kubernetes Secret (e.g., clustersize-secrets or pippo-secret) containing the mandatory HASH_SALT key for HMAC signing.
 
          - Log limits: Define maximum file size and rotation values before saving.
+         
+         - IsBareMetal: Used to identify if the cluster runs directly on physical bare-metal hardware (true) or within a virtualized environment (false).
+
+         - SubscriptionServiceLevel: The contract service tier associated with the cluster (Standard or Premium).
 
       <p align="left">
-        <em><strong>Figure 7 - ClusterSizeConfig created</strong></em><br>
+        <em><strong>Figure 6 - ClusterSizeConfig created</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/5-configurationexample.png" width="850">
       </p>
       <br>
 
-   - Step 8: Verify Active Workload Pods (Ref: Figure 7)
+   - Step 7: Verify Active Workload Pods (Ref: Figure 7)
       - Once the configuration is saved, the operator deploys the necessary backend workloads. In your OpenShift topology view or pod list, you will see two running pods:
 
          - controller-manager: The control plane pod that watches your configurations and manages resources.
@@ -794,7 +787,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          - clustersize: The worker data-plane pod that collects cluster metrics, signs them securely using the key in your secret, and streams them out via UDP.
 
       <p align="left">
-        <em><strong>Figure 8 - Cluster Size Operator PODs</strong></em><br>
+        <em><strong>Figure 7 - Cluster Size Operator PODs</strong></em><br>
         <img src="https://raw.githubusercontent.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/main/clustersize-operator-images/7-clustersizeconfigs-pods.png" width="425">
       </p>
       <br>
