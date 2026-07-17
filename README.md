@@ -690,7 +690,31 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
 ## Custer Size Operator Installation:
 
-   - Step 1: Locate the Operator in the OpenShift Software Catalog (Ref: Figure 1)
+   - Step 1: Add the clustersize-catalog to the Red Hat OpenShift cluster:
+
+      - In the top-right header banner of the Web Console, look for the Quick Create icon (the + icon).
+      - Select Import YAML.
+      - Paste the following resource configuration:
+
+         ~~~
+         apiVersion: operators.coreos.com/v1alpha1
+         kind: CatalogSource
+         metadata:
+           name: clustersize-catalog
+           namespace: openshift-marketplace
+         spec:
+           displayName: Cluster Size Operator Catalog
+           publisher: Platform Team
+           sourceType: grpc
+           image: ghcr.io/rbruzzon73/clustersize-catalog:v2.0.102
+           updateStrategy:
+             registryPoll:
+               interval: 45m
+         ~~~
+      - Click on create.
+      
+
+   - Step 2: Locate the Operator in the OpenShift Software Catalog (Ref: Figure 1)
 
       - Log in to your Red Hat OpenShift web console. Navigate to Ecosystem > Software Catalog in the left-hand menu. Search for "Cluster Size Operator", click on its tile to open the detail pane, and click Install to begin the configuration.
 
@@ -700,7 +724,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       </p>
       <br>
 
-   - Step 2: On the Operator Installation page, confirm the operator deployment in the recommended namespace: openshift-size-monitoring (Ref: Figure 2)
+   - Step 3: On the Operator Installation page, confirm the operator deployment in the recommended namespace: openshift-size-monitoring (Ref: Figure 2)
    
      <p align="left">
         <em><strong>Figure 2 - Operator installation in openshift-size-monitoring namespace</strong></em><br>
@@ -708,7 +732,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
      </p>
      <br>
 
-   - Step 3: Verify Successful Operator Deployment (Ref: Figure 3)
+   - Step 4: Verify Successful Operator Deployment (Ref: Figure 3)
      
       - OpenShift will pull the operator image and prepare the deployment. Once the installation completes, the console will display an "Operator installed successfully" message.
       
@@ -720,7 +744,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       </p>
       <br>
 
-   - Step 4: Open the ClusterSizeConfig Creation Form (Ref: Figure 4)
+   - Step 5: Open the ClusterSizeConfig Creation Form (Ref: Figure 4)
      
       - Navigate to the installed operator details and click on Create ClusterSizeConfig.
         
@@ -732,7 +756,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       </p>
       <br>
 
-   - Step 5: Manage Sizing Configurations (Ref: Figure 5)
+   - Step 6: Manage Sizing Configurations (Ref: Figure 5)
      
       - In the ClusterSizeConfigs tab of the operator, you can view, edit, or delete existing configuration instances running in your namespace.
         
@@ -744,7 +768,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       </p>
       <br>
 
-   - Step 6: Configure and Save Sizing Parameters (Ref: Figure 6)
+   - Step 7: Configure and Save Sizing Parameters (Ref: Figure 6)
    
       - Fill in the configuration details for your monitor:
 
@@ -762,7 +786,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
       </p>
       <br>
 
-   - Step 7: Verify Active Workload Pods (Ref: Figure 7)
+   - Step 8: Verify Active Workload Pods (Ref: Figure 7)
       - Once the configuration is saved, the operator deploys the necessary backend workloads. In your OpenShift topology view or pod list, you will see two running pods:
 
          - controller-manager: The control plane pod that watches your configurations and manages resources.
