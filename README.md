@@ -931,7 +931,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          --end END                         End Date (YYYY-MM-DD) for active EUS calculations
        ~~~
 
-       - Example of subscription file (subscriptions.txt) content:
+       - Example of subscription file (default: subscriptions.txt) content:
 
        ~~~
        premium_s390x_subscriptions=36
@@ -945,7 +945,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
        premium_ocp_term_3=1
        ~~~
 
-       - How to genare a Red Hat OpenShift life cycle file (ocp_lifecycle.csv):
+       - How to genare the OpenShift lifecycle matrix mapping file (default: ocp_lifecycle.csv):
 
           - The creation of `ocp_lifecycle.csv` can be automated using the following steps:
 
