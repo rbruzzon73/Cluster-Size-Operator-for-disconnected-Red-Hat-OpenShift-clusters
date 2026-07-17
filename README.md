@@ -93,7 +93,15 @@
         secret	<string> -required-
           Secret points to the Name of the Corev1 Secret inside the namespace
           containing the mandatory 'HASH_SALT' cryptographic key.
-   
+
+        subscription_service_level	<string> -required-
+          SubscriptionServiceLevel defines the support tier for the cluster. 
+          Must be set to either "Premium" or "Standard".
+
+        is_bare_metal	<boolean> -required-
+          IsBareMetal defines whether the cluster runs on physical bare metal 
+          hardware (true) or a virtualized platform (false).
+          
         suspend	<boolean>
           Suspend flips the operational state of the controller loop. When set to
           true, active collection deployments are completely torn down.
@@ -107,27 +115,33 @@
    - Cluster Version: Current platform release version vectors.
    - Hostnode Operational Role: Mapped via index values (e.g.: control-plane, infra, master, ODF, ingress, worker, etc. etc.).
    - Allocated vCPU Count: Total virtual cores per node.
-   - Deployment Environment State: (true for Bare-Metal hardware, false for virtualized OpenStack/KVM instances).
 
-- The operator determines the cluster's platform using a step-by-step logic. 
-- However, there is a specific blind spot when it comes to User-Provisioned Infrastructure (UPI) Baremetal deployments.
-- Here is how the logic behaves:
+- The operator enriches the telemetry data extracted from OpenShift with these additional parameters defined in the ClusterSizeConfig Custom Resource:
 
-   - Step 1: Check for BareMetalHost Resources (Metal3)
+   - SubscriptionServiceLevel: The contract service tier associated with the cluster (Standard or Premium).
+   - IsBareMetal: A boolean flag defining whether the cluster runs directly on physical bare-metal hardware (true) or within a virtualized environment (false)."
    
-      - The operator looks for active physical host objects (BareMetalHost).
+- The operator will confirm the Bare Metal platform using a new, step-by-step logic:
 
-      - In a standard UPI deployment, because you provision the operating system and hardware manually outside of OpenShift, these BareMetalHost objects are not present.
+   - Step 1: Look for BareMetalHost Resources (Metal3)
+
+      - The operator looks for active physical host objects (BareMetalHost).
 
    - Step 2: Parse the install-config.yaml ConfigMap
 
-      - If no baremetal hosts are found, the operator falls back to reading the original installation configuration. It looks at the platform fields to see if a specific infrastructure provider (like vsphere, aws, etc.) was declared.
+      - If no Bare Metal hosts are found, the operator falls back to reading the original installation configuration.
+      
+      - It inspects the platform fields to see if a specific infrastructure provider (such as vsphere, aws, etc.) other than none was declared.
 
-      - The UPI Limitation: For UPI baremetal installations, the standard practice is to set the platform to none: {}.
+   - Implemented Logic:
 
-   - Step 3: Fallback to "None"
+      - The isBareMetal: true condition defined in the ClusterSizeConfig acts strictly as a fallback; it is only applied if no active BareMetalHost resources are discovered and the platform fields inside the cluster-config-v1 ConfigMap are explicitly set to none.
 
-      - If both checks yield nothing (no BareMetalHost objects exist, and the install-config platform is empty or set to none), the operator has no physical or API-driven indicators to know it is running on physical hardware. It must default to None.
+      - Once an unconditional bare-metal state is confirmed, the value Baremetal is forced into the platform field of the telemetry H (Header) line. 
+      
+      - Conversely, if an explicit infrastructure platform (such as vsphere or aws) is detected within the cluster-config-v1 resource, that specific infrastructure string is reported in the H header instead.
+
+      - This finalized parameter is ultimately propagated downstream to populate the PLATFORM field in the master report, dictating whether the node resource allocations are calculated as physical cores or virtual vCPUs.
 
 ## Data & Network Volume Evaluation
 
@@ -157,12 +171,57 @@
 - The raw text layout nested inside the network frame packet envelope follows this structured layout prior to compression:
 
    ~~~
-   H,[ClusterID],[NodeCount],[VersionIndex],[InitVersionIndex],[InstallDate],None,[CurrentEpoch],[Arch]
-   N,[ClusterID],[SequentialIndex],[RoleIndex],[vCPU],[IsBaremetal]
-   R,[Base64_Encoded_Lookup_Table_Mapping_Indices_To_Cleartext_Versiosn and Roles]
-   T,[HMAC-SHA256_Data_Integrity_Signature]
+   H,[ClusterID],[NodeCount],[SubscriptionServiceLevel],[InstallDate],[Platform],[CurrentEpoch],[Arch]
+   N,[ClusterID],[SequentialIndex],[RoleIndex],[Raw_CPU_Capacity],true
+   R,[Base64_Encoded_Lookup_Table_Mapping...]
+   T,[HMAC-SHA256_Signature]
    ~~~
-   
+
+   - H (Header Record) defines the global identity, contractual support tier, and resolved infrastructure layer of the OpenShift cluster.
+
+      - ClusterID: The unique OpenShift Cluster UUID (extracted from the ClusterVersion resource).
+      - NodeCount: The total number of active node objects discovered in the cluster.
+      - SubscriptionServiceLevel]: The contract service tier defined in the CR (STANDARD or PREMIUM), used downstream to aggregate license gap balances.
+      - InstallDate: Unix Epoch timestamp representing the cluster's initial completion/installation datetime.
+      - Platform: The hierarchically resolved infrastructure provider (Baremetal, vsphere, aws, etc.), used downstream to dictate whether core metrics are calculated as physical or virtual.
+      - CurrentEpoch: A dynamic time-token updated on each collection loop execution to preserve chronological order.
+      - Arch: The underlying hardware instruction set architecture of the cluster hosts (e.g., amd64).
+
+   - N (Node Record) represents the computational capacity metrics and operational groups of an individual host inside the cluster. One N line is generated for each node.
+
+      - ClusterID: The associated cluster UUID, used downstream for row correlation.
+      - SequentialIndex: A zero-padded incremental sequence number (e.g., 001, 002) identifying the node position in the frame.
+      - RoleIndex: A numerical identifier referencing the node's specific role combination (e.g., 3, 4), mapped using the R record.
+      - Raw_CPU_Capacity: The raw hardware CPU allocation metric reported directly from the node status capacity capacity vectors.
+      - IsBaremetal: A fixed boolean placeholder set to true. The structural destination logic relies on the [Platform] element in the H line above to determine virtual vs physical processing constraints.
+
+
+   - R (Reference / Lookup Record), acts as the translation dictionary for the obfuscated index values passed inside the frame.
+
+      - Base64_Encoded_Lookup_Table: A Base64-obfuscated string. When decoded, it reveals a sequential, comma-separated lookup dictionary structured in a strict field order. 
+      
+         - The elements are ordered sequentially by index type: it leads with the cluster release versions (1=Current_Version followed by 2=Initial_Version), and continues immediately with the node role mappings in ascending numerical order based on their generated index values (e.g., 3=Role_Group_A, 4=Role_Group_x). 
+         - This translates raw numerical indicators cleanly back to cleartext platform releases (e.g., 1=4.20.27) and combined node role labels (e.g., 3=control-plane#master).ship vectors matching numerical indices back to cleartext OpenShift release versions (e.g., 1=4.20.27) and labeled node roles (e.g., 3=control-plane master).
+
+   - T (Trailer / Integrity Record), the cryptographic lock sealing the transmission stream against payload modifications or transport injection attempts across network boundaries.
+
+      - HMAC-SHA256_Signature: The secure message authentication checksum generated by hashing the preceding payload lines (H, N, R) using the private HASH_SALT key managed inside the cluster namespace.
+
+- Example of Telemtry data reassembled:
+
+      ~~~
+      # [AUDIT] MSG 000000000008 from 192.168.100.22 (1 frames) [INTEGRITY: OK]
+      H,d08824f5-4252-4883-b587-01110c52ef2f,6,PREMIUM,1782827878,None,1784290200,amd64
+      N,d08824f5-4252-4883-b587-01110c52ef2f,node-001,control-plane master,40,true
+      N,d08824f5-4252-4883-b587-01110c52ef2f,node-002,control-plane master,40,true
+      N,d08824f5-4252-4883-b587-01110c52ef2f,node-003,control-plane master,40,true
+      N,d08824f5-4252-4883-b587-01110c52ef2f,node-004,worker,50,true
+      N,d08824f5-4252-4883-b587-01110c52ef2f,node-005,worker,50,true
+      N,d08824f5-4252-4883-b587-01110c52ef2f,node-006,worker,50,true
+      R,UiwxPTQuMjAuMjcsMj00LjE5LjMwLDM9Y29udHJvbC1wbGFuZSNtYXN0ZXIsND13b3JrZXI=
+      T,13b2198ea71cece188d02b7de2cb50585a017b7b866b4f570dd4e8ba8af1b25f
+      ~~~
+
 ## Dynamic Slicing and Network Metrics
 
 - To guarantee network compatibility, the collector uses an 80-node fragmentation threshold. 
@@ -532,13 +591,15 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          - It compiles an intermediate, clean raw CSV file:
 
             ~~~
-            H,999924f5-4252-4883-b587-01110c52ef2f,4,4.20.27,4.19.30,2026-01-15 09:00:00 UTC,None,2026-07-14 15:30:00 UTC,amd64
-            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-01,control-plane master,40,true
-            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-02,control-plane master,40,true
-            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-03,worker,50,true
-            N,999924f5-4252-4883-b587-01110c52ef2f,hist-node-04,worker,50,true
-            R,UiwxPTQuMjAuMjcsMj00LjE5LjMw
-            T,token-hist-jul
+            H,d08824f5-4252-4883-b587-01110c52ef2f,6,PREMIUM,2026-06-30 13:57:58 UTC,None,2026-07-17 11:29:59 UTC,amd64
+            N,d08824f5-4252-4883-b587-01110c52ef2f,node-001,control-plane master,40,true
+            N,d08824f5-4252-4883-b587-01110c52ef2f,node-002,control-plane master,40,true
+            N,d08824f5-4252-4883-b587-01110c52ef2f,node-003,control-plane master,40,true
+            N,d08824f5-4252-4883-b587-01110c52ef2f,node-004,worker,50,true
+            N,d08824f5-4252-4883-b587-01110c52ef2f,node-005,worker,50,true
+            N,d08824f5-4252-4883-b587-01110c52ef2f,node-006,worker,50,true
+            R,UiwxPTQuMjAuMjcsMj00LjE5LjMwLDM9Y29udHJvbC1wbGFuZSNtYXN0ZXIsND13b3JrZXI=
+            T,8d0413d1b2f160001ddc1b6ba2c5ffd2a4b2a7a487705895a78bc4c6bd75dfd5
             ~~~
 
          - Deduplication CLI Options:
@@ -569,7 +630,7 @@ When operating multiple disconnected clusters across an enterprise, managing dis
             - Because the choice of one-way transport technology depends entirely on internal security compliance and physical isolation standards, the best technical solution for Stage 2 must be evaluated and defined exclusively by the Customer.
 
 
-      - Stage 3: Compliance -Compliance & Gap Evaluation (evaluate_compliance.py)
+      - Stage 3: Compliance Compliance & Gap Evaluation (evaluate_compliance.py)
 
          - The evaluation script consumes the deduplicated output of Stage A.
          
@@ -588,6 +649,27 @@ When operating multiple disconnected clusters across an enterprise, managing dis
          - Subscription Gap Analysis:
 
             - Evaluates OCP version lifecycles and appends summarized metrics highlighting overall node loads, active subscription inventories, and compliance deficits (GAP rows) under standard and premium tiers.
+
+         - Example of CSV output generated from evaluate_compliance.py
+
+            ~~~
+            CLUSTER_ID,PLATFORM,CLUSTER_VERSION,CLUSTER_INITIAL_VERSION,CLUSTER_NODE_COUNT,CLUSTER_INSTALLED_AT,SUPPORT,HOSTNAME,NODE_ROLES,NODE_ARCHITECTURE,LAST_UPDATE_RECEIVED,TOTAL_PHYSICAL_CPU_CORES,TOTAL_VIRTUAL_VCPUS,TOTAL_MEMORY,TOTAL_REQUIRED_SUB_FOR_PHYSICAL_CPU_CORES,TOTAL_REQUIRED_SUB_FOR_VIRTUAL_VCPUS,EUS_TERM1_REQUIRED_SUBS_PHYSICAL_CPU_CORES,EUS_TERM2_REQUIRED_SUBS_PHYSICAL_CPU_CORES,EUS_TERM3_REQUIRED_SUBS_PHYSICAL_CPU_CORES,EUS_TERM1_REQUIRED_SUBS_VIRTUAL_VCPUS,EUS_TERM2_REQUIRED_SUBS_VIRTUAL_VCPUS,EUS_TERM3_REQUIRED_SUBS_VIRTUAL_VCPUS,IS_GRAND_TOTAL
+            d08824f5-4252-4883-b587-01110c52ef2f,NotAvailable,4.20.27,4.19.30,6,2026-06-30 13:57:58 UTC,PREMIUM,node-004,worker,AMD64,2026-07-17 11:29:59 UTC,0,50,NotAvailable,0,13,0,0,0,0,0,0,0
+            d08824f5-4252-4883-b587-01110c52ef2f,NotAvailable,4.20.27,4.19.30,6,2026-06-30 13:57:58 UTC,PREMIUM,node-005,worker,AMD64,2026-07-17 11:29:59 UTC,0,50,NotAvailable,0,13,0,0,0,0,0,0,0
+            d08824f5-4252-4883-b587-01110c52ef2f,NotAvailable,4.20.27,4.19.30,6,2026-06-30 13:57:58 UTC,PREMIUM,node-006,worker,AMD64,2026-07-17 11:29:59 UTC,0,50,NotAvailable,0,13,0,0,0,0,0,0,0
+            AMD64 GRAND TOTAL LOAD - STANDARD,,,,,,STANDARD,,,AMD64,,0,0,0,0,0,0,0,0,0,0,0,1
+            AMD64 GRAND TOTAL LOAD - PREMIUM,,,,,,PREMIUM,,,AMD64,,0,150,0,0,39,0,0,0,0,0,0,1
+            s390x GRAND TOTAL LOAD - STANDARD,,,,,,STANDARD,,,s390x,,0,0,0,0,0,0,0,0,0,0,0,1
+            s390x GRAND TOTAL LOAD - PREMIUM,,,,,,PREMIUM,,,s390x,,0,0,0,0,0,0,0,0,0,0,0,1
+            AMD64 SUBSCRIPTION AVAILABLE - STANDARD,,,,,,STANDARD,,,AMD64,,,,,917,0,693,100,200,0,0,0,2
+            AMD64 SUBSCRIPTION AVAILABLE - PREMIUM,,,,,,PREMIUM,,,AMD64,,,,,985,0,0,1,1,0,0,0,2
+            s390x SUBSCRIPTION AVAILABLE - STANDARD,,,,,,STANDARD,,,s390x,,,,,18,0,0,0,0,0,0,0,2
+            s390x SUBSCRIPTION AVAILABLE - PREMIUM,,,,,,PREMIUM,,,s390x,,,,,36,0,0,0,0,0,0,0,2
+            GAP AMD64 SUBSCRIPTIONS - STANDARD,,,,,,STANDARD,,,AMD64,,,,,-917,0,-693,-100,-200,0,0,0,3
+            GAP AMD64 SUBSCRIPTIONS - PREMIUM,,,,,,PREMIUM,,,AMD64,,,,,-946,0,0,-1,-1,0,0,0,3
+            GAP s390x SUBSCRIPTIONS - STANDARD,,,,,,STANDARD,,,s390x,,,,,-18,0,0,0,0,0,0,0,3
+            GAP s390x SUBSCRIPTIONS - PREMIUM,,,,,,PREMIUM,,,s390x,,,,,-36,0,0,0,0,0,0,0,3
+            ~~~
               
          - Evaluation CLI Options:
 
@@ -831,3 +913,24 @@ When operating multiple disconnected clusters across an enterprise, managing dis
         --start START                      Start Date (YYYY-MM-DD) for active EUS calculations
         --end END                         End Date (YYYY-MM-DD) for active EUS calculations
       ~~~
+
+   - Example of subscription file (subscriptions.txt) content:
+
+      ~~~
+      premium_s390x_subscriptions=36
+      standard_s390x_subscriptions=18
+      premium_ocp_subscriptions=985
+      standard_ocp_subscriptions=917
+      standard_ocp_term_1=693
+      standard_ocp_term_2=100
+      standard_ocp_term_3=200
+      premium_ocp_term_2=1
+      premium_ocp_term_3=1
+      ~~~
+
+  - How to genare a Red Hat OpenShift life cycle file (ocp_lifecycle.csv):
+
+  
+
+
+   
