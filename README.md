@@ -121,27 +121,31 @@
    - SubscriptionServiceLevel: The contract service tier associated with the cluster (Standard or Premium).
    - IsBareMetal: A boolean flag defining whether the cluster runs directly on physical bare-metal hardware (true) or within a virtualized environment (false)."
    
-- The operator will confirm the Bare Metal platform using a new, step-by-step logic:
+- The operator determines the Bare Metal platform using the following hierarchical logic:
 
    - Step 1: Look for BareMetalHost Resources (Metal3)
 
-      - The operator looks for active physical host objects (BareMetalHost).
-
-   - Step 2: Parse the install-config.yaml ConfigMap
-
-      - If no Bare Metal hosts are found, the operator falls back to reading the original installation configuration.
+      - The operator checks for active physical host objects (BareMetalHost). 
       
-      - It inspects the platform fields to see if a specific infrastructure provider (such as vsphere, aws, etc.) other than none was declared.
+      - If discovered, the platform is immediately set to Baremetal.
+
+   - Step 2: Parse the install-config.yaml inside the cluster-config-v1 ConfigMap
+
+      - If no BareMetalHost resources are found, the operator falls back to inspecting the cluster's original installation configuration.
+      
+      - It evaluates the platform fields to check if a specific infrastructure provider (such as vsphere, aws, etc.) other than none was declared.
 
    - Implemented Logic:
 
-      - The isBareMetal: true condition defined in the ClusterSizeConfig acts strictly as a fallback; it is only applied if no active BareMetalHost resources are discovered and the platform fields inside the cluster-config-v1 ConfigMap are explicitly set to none.
-
-      - Once an unconditional bare-metal state is confirmed, the value Baremetal is forced into the platform field of the telemetry H (Header) line. 
+      - The isBareMetal: true flag defined in the ClusterSizeConfig Custom Resource acts strictly as a final fallback. 
       
-      - Conversely, if an explicit infrastructure platform (such as vsphere or aws) is detected within the cluster-config-v1 resource, that specific infrastructure string is reported in the H header instead.
-
-      - This finalized parameter is ultimately propagated downstream to populate the PLATFORM field in the master report, dictating whether the node resource allocations are calculated as physical cores or virtual vCPUs.
+      - It is evaluated only if no BareMetalHost resources exist and the infrastructure platform inside install-config.yaml is explicitly set to none.
+      
+      - Once a bare-metal state is confirmed via this hierarchy, the string Baremetal is forced into the platform field of the telemetry H (Header) line. 
+      
+      - Conversely, if an explicit infrastructure platform (such as vsphere or aws) is detected, that specific platform name is reported in the H header instead, overriding the Custom Resource flag.
+      
+      - This final parameter is propagated downstream to populate the PLATFORM field in the master report, dictating whether node resource allocations are calculated as physical cores or virtual vCPUs.
 
 ## Data & Network Volume Evaluation
 
