@@ -1,0 +1,11 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: clustersize-catalog
+  namespace: openshift-marketplace
+spec:
+  displayName: "Custom Sizing Utilities v2.0.105"
+  publisher: "Platform Team"
+  sourceType: grpc
+  image: ghcr.io/rbruzzon73/clustersize-catalog:v2.0.105
+  imagePullPolicy: Always

@@ -6,29 +6,40 @@ import (
 
 // ClusterSizeConfigSpec defines the desired state of ClusterSizeConfig
 type ClusterSizeConfigSpec struct {
+	// CheckInterval defines the frequency of telemetry checks. 
+	// It supports pure numbers for hours (e.g., "10") or explicit units (e.g., "24h", "36000s", "90m").
 	// +kubebuilder:validation:Required
 	CheckInterval string `json:"checkInterval"`
 
+	// LogMaxRotations defines the maximum number of log file rotations to keep.
 	LogMaxRotations int `json:"logMaxRotations,omitempty"`
+
+	// LogMaxSizeBytes defines the maximum size in bytes before the log file is rotated.
 	LogMaxSizeBytes int `json:"logMaxSizeBytes,omitempty"`
 
+	// RemoteIp is the IP address of the central aggregation server to send the UDP payload to.
 	// +kubebuilder:validation:Required
 	RemoteIp string `json:"remoteIp"`
 
+	// RemoteUdpPort is the UDP port of the central aggregation server (e.g., 555).
 	// +kubebuilder:validation:Required
 	RemoteUdpPort int `json:"remoteUdpPort"`
 
+	// Secret is the name of the Kubernetes Secret containing the cryptographic key (salt) for hashing.
+	// If the specified Secret does not exist, the operator will automatically create it with a default value the first time.
 	// +kubebuilder:validation:Required
 	Secret string `json:"secret"`
 
+	// Suspend allows temporarily suspending the monitoring cycle execution if set to true.
 	Suspend bool `json:"suspend,omitempty"`
 
-	// IsBareMetal specifies whether the cluster runs on raw physical hardware.
-	// This parameter acts as a fallback for UPI bare metal configurations.
-	// +kubebuilder:validation:Required
-	IsBareMetal bool `json:"isBareMetal"`
+	// IsBareMetal specifies whether the cluster runs on native physical hardware.
+	// This parameter acts as a fallback for bare metal UPI configurations.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	IsBareMetal bool `json:"isBareMetal,omitempty"`
 
-	// SubscriptionServiceLevel dictates the contract service tier associated with the cluster.
+	// SubscriptionServiceLevel defines the contract level associated with the cluster (Premium or Standard).
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Premium;Standard
 	SubscriptionServiceLevel string `json:"subscriptionServiceLevel"`

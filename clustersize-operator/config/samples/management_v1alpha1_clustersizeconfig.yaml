@@ -7,6 +7,6 @@ metadata:
     app.kubernetes.io/part-of: clustersize
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: clustersize
-  name: clustersizeconfig-sample
+  name: cluster-size-config
 spec:
   # TODO(user): Add fields here

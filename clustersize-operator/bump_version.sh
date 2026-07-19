@@ -64,4 +64,4 @@ echo "✅ Allineamento completato con successo alla v${NEW_VER}!"
 echo "Ora puoi lanciare ./upgrade_and_push.sh"
 echo "=================================================="
 
-grep -HRi "2.0." * 2>/dev/null | grep -vE "go.sum|go.mod|base64data|bundle|License, Version 2.0|1:-v2.0.18|falls back safely|cpu:|image tag|bump|Examples"
+grep -HRi "2.0." * 2>/dev/null | grep -vE "go.sum|go.mod|base64data|bundle|License, Version 2.0|1:-v2.0.18|falls back safely|cpu:|image tag|bump|Examples|.csv"

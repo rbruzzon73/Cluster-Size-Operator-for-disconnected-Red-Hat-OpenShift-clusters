@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,34 +48,34 @@ type InstallConfig struct {
 	Platform map[string]interface{} `yaml:"platform"`
 }
 
-// parseIntervalToSeconds parses duration strings. 
-// Supports pure numbers (interpreted as hours) and explicit units like "24000h", "36000s", "90m".
+// parseIntervalToSeconds parses duration strings supporting seconds (s), minutes (m), and hours (h).
 func parseIntervalToSeconds(intervalStr string) int {
 	intervalStr = strings.TrimSpace(strings.ToLower(intervalStr))
 	if intervalStr == "" {
-		return 86400 // Fallback 24h
+		return 86400
 	}
 
-	// 1. Se l'operatore scrive solo il numero (es. "24000")
-	if intVal, err := strconv.Atoi(intervalStr); err == nil {
-		return intVal * 3600
+	re := regexp.MustCompile(`^([0-9]+)([smh])$`)
+	matches := re.FindStringSubmatch(intervalStr)
+	if len(matches) != 3 {
+		return 86400
 	}
 
-	// 2. Se l'operatore scrive il numero con la 'h' (es. "10h" o "24000h")
-	if strings.HasSuffix(intervalStr, "h") {
-		pureNumberStr := strings.TrimSuffix(intervalStr, "h")
-		if intVal, err := strconv.Atoi(pureNumberStr); err == nil {
-			return intVal * 3600
-		}
-	}
-
-	// 3. Per le altre unità di misura esplicite (es. "36000s", "90m") usiamo il parsing nativo
-	duration, err := time.ParseDuration(intervalStr)
+	value, err := strconv.Atoi(matches[1])
 	if err != nil {
-		return 86400 // Fallback in caso di stringa non valida
+		return 86400
 	}
 
-	return int(duration.Seconds())
+	switch matches[2] {
+	case "s":
+		return value
+	case "m":
+		return value * 60
+	case "h":
+		return value * 33600
+	default:
+		return 86400
+	}
 }
 
 // --- LOCAL RULES ---
@@ -176,7 +177,6 @@ func (r *ClusterSizeConfigReconciler) determinePlatform(ctx context.Context, crI
 			logger.Info("No automated platform metrics discovered. Fallback to CR target IsBareMetal = true: forcing Baremetal")
 			return "Baremetal"
 		}
-		logger.Info("Platform detected as 'none' and IsBareMetal is false. Setting platform to: None")
 		return "None"
 	}
 
@@ -224,15 +224,10 @@ func (r *ClusterSizeConfigReconciler) compileTelemetryBasePayload(ctx context.Co
 		}
 	}
 
-	logger.Info(fmt.Sprintf("Telemetry collection profile: ClusterID=%s, CurrentVersion=%s, InitialVersion=%s, Platform=%s", 
-		clusterID, currentVer, initialVer, detectedPlatform))
-
 	nodes := &corev1.NodeList{}
 	if err := r.List(ctx, nodes); err != nil {
 		return "", err
 	}
-
-	logger.Info(fmt.Sprintf("Discovered total nodes count inside cluster target mapping: %d", len(nodes.Items)))
 
 	sort.Slice(nodes.Items, func(i, j int) bool { return nodes.Items[i].Name < nodes.Items[j].Name })
 
@@ -269,10 +264,6 @@ func (r *ClusterSizeConfigReconciler) compileTelemetryBasePayload(ctx context.Co
 		}
 		
 		physicalCores := node.Status.Capacity.Cpu().Value()
-		
-		logger.Info(fmt.Sprintf("Processing Node mapping allocation: Hostname=%s, LabeledRoles=%s, Cores=%d", 
-			node.Name, roleString, physicalCores))
-
 		lines = append(lines, fmt.Sprintf("N,%s,%s,%d,%d,true", clusterID, nodeID, groupID, physicalCores))
 	}
 
@@ -294,8 +285,6 @@ func (r *ClusterSizeConfigReconciler) compileTelemetryBasePayload(ctx context.Co
 
 	rEncrypted := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("R,%s", strings.Join(rMappings, ","))))
 	lines = append(lines, fmt.Sprintf("R,%s", rEncrypted))
-
-	logger.Info("Telemetry payload generation sequence finished successfully. Transitioning to deploy state.")
 
 	return strings.Join(lines, "\n") + "\n", nil
 }
@@ -419,19 +408,11 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 						Image:   "registry.redhat.io/openshift4/ose-cli:latest",
 						Command: []string{"/bin/bash", "-c"},
 						Args: []string{
-							`set -e
-							LOG_FILE="/var/log/container/clustersize"
+							`LOG_FILE="/var/log/container/clustersize"
 							SEQ_FILE="/var/log/container/.seq_counter"
-
-                                                        echo "Starting telemetry collector pod workflow..."
-
 							if [ -f "${SEQ_FILE}" ]; then COUNTER=$(cat "${SEQ_FILE}"); else COUNTER=0; fi
 							while true; do
 								LIVE_EPOCH=$(date +%s)
-
-							        # Log event sento to both log locale SIA and stdout (visibile da oc logs)
-                                                                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] Invio a ${REMOTE_IP}:${REMOTE_UDP_PORT}" | tee -a "${LOG_FILE}"
-
 								sed "s/__CURRENT_EPOCH_TOKEN__/${LIVE_EPOCH}/g" /tmp/manifest/payload.txt > /tmp/live_payload_base.txt
 								
 								HEADER_LINE=$(grep "^H," /tmp/live_payload_base.txt)
@@ -466,8 +447,8 @@ func (r *ClusterSizeConfigReconciler) deployWorkloads(ctx context.Context, confi
 											mv "${LOG_FILE}" "${LOG_FILE}.1" && touch "${LOG_FILE}"
 										fi
 									fi
-									cat /tmp/frame_payload.txt | tee -a "${LOG_FILE}"
-                                                                        echo "" | tee -a "${LOG_FILE}"
+									cat /tmp/frame_payload.txt >> "${LOG_FILE}"
+									echo "" >> "${LOG_FILE}"
 									
 									gzip -c /tmp/frame_payload.txt > /tmp/frame_payload.gz
 									MSG_ID=$(printf "%012d" ${COUNTER})

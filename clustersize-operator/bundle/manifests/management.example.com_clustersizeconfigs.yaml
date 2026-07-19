@@ -40,34 +40,50 @@ spec:
             description: ClusterSizeConfigSpec defines the desired state of ClusterSizeConfig
             properties:
               checkInterval:
+                description: |-
+                  CheckInterval defines the frequency of telemetry checks.
+                  It supports pure numbers for hours (e.g., "10") or explicit units (e.g., "24h", "36000s", "90m").
                 type: string
               isBareMetal:
+                default: false
                 description: |-
-                  IsBareMetal specifies whether the cluster runs on raw physical hardware.
-                  This parameter acts as a fallback for UPI bare metal configurations.
+                  IsBareMetal specifies whether the cluster runs on native physical hardware.
+                  This parameter acts as a fallback for bare metal UPI configurations.
                 type: boolean
               logMaxRotations:
+                description: LogMaxRotations defines the maximum number of log file
+                  rotations to keep.
                 type: integer
               logMaxSizeBytes:
+                description: LogMaxSizeBytes defines the maximum size in bytes before
+                  the log file is rotated.
                 type: integer
               remoteIp:
+                description: RemoteIp is the IP address of the central aggregation
+                  server to send the UDP payload to.
                 type: string
               remoteUdpPort:
+                description: RemoteUdpPort is the UDP port of the central aggregation
+                  server (e.g., 555).
                 type: integer
               secret:
+                description: |-
+                  Secret is the name of the Kubernetes Secret containing the cryptographic key (salt) for hashing.
+                  If the specified Secret does not exist, the operator will automatically create it with a default value the first time.
                 type: string
               subscriptionServiceLevel:
-                description: SubscriptionServiceLevel dictates the contract service
-                  tier associated with the cluster.
+                description: SubscriptionServiceLevel defines the contract level associated
+                  with the cluster (Premium or Standard).
                 enum:
                 - Premium
                 - Standard
                 type: string
               suspend:
+                description: Suspend allows temporarily suspending the monitoring
+                  cycle execution if set to true.
                 type: boolean
             required:
             - checkInterval
-            - isBareMetal
             - remoteIp
             - remoteUdpPort
             - secret
