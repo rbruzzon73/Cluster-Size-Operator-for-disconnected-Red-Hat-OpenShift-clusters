@@ -1,6 +1,6 @@
 # Cluster Size Operator improvements and Developements
 
-## First Improvement
+## First Improvement (Completed Jul 19, 2026)
 
 - Two new parameters will be added to the current ClusterSizeConfig [1]:
 
@@ -10,7 +10,7 @@
 
    - Note: Both parameters are mandatory, and the user interface must guide the user to select only valid, feasible values for these fields.
 
-## Second Improvement
+## Second Improvement (Completed Jul 19, 2026)
 
    - The logic used to determine if the cluster is Bare Metal or Virtual [2] will be updated as follows:
 
@@ -83,14 +83,14 @@
            true, active collection deployments are completely torn down.
          ~~~
 
-## Third Improvement
+## Third Improvement (Completed Jul 19, 2026)
 
 - The Subscription Service Level (Premium or Standard) defined in the ClusterSizeConfigs will be extended to the cluster's H header.
 
    - This parameter will be propagated and used across all blocks of the solution (telemetry_receiver.py, evaluate_compliance.py, and deduplicate_telemetry.py) to correctly evaluate data integrity and the support value associated with the cluster in the final report.
 
 
-## New Development
+## New Development (Started pm Jul 19, 2026)
 
 - Implementation of an Aggregator Cluster Size Operator within a central Red Hat OpenShift cluster to collect, deduplicate, and evaluate reports sent from all managed OpenShift clusters.
 
