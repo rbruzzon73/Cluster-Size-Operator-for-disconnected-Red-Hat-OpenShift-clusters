@@ -901,7 +901,44 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
 - Initial versions are available at the [telemetry_receiver repository](https://github.com/rbruzzon73/Cluster-Size-Operator-for-disconnected-Red-Hat-OpenShift-clusters/tree/main/telemetry_receiver)
 
-   - deduplicate_telemetry.py syntax
+   - deduplicate_telemetry.py 
+
+      - In a multi-cluster environment, edge clusters continuously send telemetry streams (node core counts, architecture, OCP version, HMAC signatures, timestamp) over socket connections (e.g., via socat). 
+      
+      - Raw log often contain multiple reports from the same cluster within the same aggregation window.
+
+      - deduplicate_telemetry.py cleans the raw ingress logs, validates payload integrity, and produces a single, normalized, deduplicated dataset.
+
+           ~~~
+           +-------------------+      +-------------------------+      +---------------------------+
+           | Raw Log Streams   | ---> | deduplicate_telemetry.py| ---> | Clean Deduplicated File   |
+           | (Ingress Sockets) |      | (Filter, Verify, Clean) |      | (e.g., deduplicated.raw)  |
+           +-------------------+      +-------------------------+      +---------------------------+
+           ~~~
+           
+      - deduplicate_telemetry.py syntax
+
+         - Filtering Window (--start, --end, --last-day):
+
+            - Parses log filenames or timestamp headers to scope the data processing window.
+
+            - --last-day picks up only the most recent 24-hour log file, ideal for execution via CronJob.
+
+         - Cryptographic Validation (HMAC-SHA256):
+
+            - Uses the SECRET_SALT configured in cluster-size-config-secret to re-compute and verify the HMAC signature attached to each incoming cluster telemetry payload.
+
+            - Discards corrupted, tampered, or unauthenticated log lines.
+
+         - Deduplication Logic:
+
+            - Keys records by unique tuple: (Cluster ID / Cluster Name, Timestamp, Node/Core Metrics).
+
+            - Keeps only the latest valid entry per cluster per observation interval, discarding duplicate TCP frame retransmissions.
+
+         - Output Generation (--output):
+
+            - Writes the consolidated, verified records to a single clean output file for downstream consumption by the compliance evaluator.
 
       ~~~
       $ python3 deduplicate_telemetry.py --help
@@ -917,8 +954,73 @@ When operating multiple disconnected clusters across an enterprise, managing dis
         --output OUTPUT  Path to the output deduplicated raw file
       ~~~
 
-   - evaluate_compliance.py syntax
+   - evaluate_compliance.py 
 
+      - evaluate_compliance.py processes the deduplicated telemetry file against customer entitlements (subscriptions.txt) and OpenShift lifecycle rules (ocp_lifecycle.csv). 
+      
+      - It calculates whether the deployed core capacities exceed active subscriptions—taking into account Extended Update Support (EUS) terms—and computes capacity gaps.
+
+         ~~~
+         +------------------------+
+         | Deduplicated Telemetry | --+
+         +------------------------+   |
+         +------------------------+   |    +-----------------------+      +-------------------------+
+         | Customer Subscriptions | - + -> | evaluate_compliance.py| ---> | Final CSV Compliance    |
+         +------------------------+   |    | (Gaps & EUS Logic)    |      | Report                  |
+         +------------------------+   |    +-----------------------+      +-------------------------+
+         | OpenShift Lifecycle    | --+
+         +------------------------+
+         ~~~
+
+      - evaluate_compliance.py syntax
+ 
+         - Deduplicated Telemetry (--input): Clean cluster data containing node architecture (x86_64, s390x), core counts, and OpenShift version string (e.g., 4.12.10).
+
+         - Customer Subscriptions (--subscriptions):
+
+            - Key-value text file defining active entitlement pools:
+
+               - premium_ocp_subscriptions, standard_ocp_subscriptions (Base OpenShift subscriptions).
+
+               - premium_s390x_subscriptions, standard_s390x_subscriptions (IBM Z / System z specific allocations).
+
+               - standard_ocp_term_1, term_2, term_3 (Extended Update Support entitlements).
+
+
+         - Lifecycle Matrix Mapping (--lifecycle / ocp_lifecycle.csv):
+
+            - Generated dynamically via the provided curl + jq pipeline from Red Hat's lifecycle API.
+
+            - Maps each OCP minor version (4.x) to EUS Term 1, Term 2, and Term 3 start/end dates.
+
+      - evaluate_compliance.py process
+
+         - Lifecycle & EUS Phase Mapping:
+
+            - Reads the ocp_lifecycle.csv lookup table.
+
+            - Checks the cluster's OCP version and evaluation period (--start, --end).
+
+            - Determines if a cluster requires standard core licensing or additional EUS Term 1/2/3 add-on subscriptions based on its release phase.
+          
+         - Capacity Aggregation by Architecture:
+
+            - Groups total physical cores into distinct buckets:
+
+            - x86_64 / amd64 vs. s390x (IBM Z).
+
+            - Standard vs. Premium Service Levels.
+
+         - Delta / Gap Calculation:
+       
+            ~~~
+            Resource Gap = Deployed Core Capacity - Subscribed Entitlements
+            ~~~
+
+            - Positive Gap: Non-compliant (Over-capacity / under-licensed).
+
+            - Zero or Negative Gap: Compliant (Fully covered within entitlements).
+  
        ~~~
        $ python3 evaluate_compliance.py --help
        usage: evaluate_compliance.py [-h] [--input INPUT] [--output OUTPUT] [--subscriptions SUBSCRIPTIONS] [--lifecycle LIFECYCLE] [--start START] [--end END]
@@ -937,17 +1039,17 @@ When operating multiple disconnected clusters across an enterprise, managing dis
 
        - Example of subscription file (default: subscriptions.txt) content:
 
-       ~~~
-       premium_s390x_subscriptions=36
-       standard_s390x_subscriptions=18
-       premium_ocp_subscriptions=985
-       standard_ocp_subscriptions=917
-       standard_ocp_term_1=693
-       standard_ocp_term_2=100
-       standard_ocp_term_3=200
-       premium_ocp_term_2=1
-       premium_ocp_term_3=1
-       ~~~
+          ~~~
+          premium_s390x_subscriptions=36
+          standard_s390x_subscriptions=18
+          premium_ocp_subscriptions=985
+          standard_ocp_subscriptions=917
+          standard_ocp_term_1=693
+          standard_ocp_term_2=100
+          standard_ocp_term_3=200
+          premium_ocp_term_2=1
+          premium_ocp_term_3=1
+          ~~~
 
        - How to genare the OpenShift lifecycle matrix mapping file (default: ocp_lifecycle.csv):
 
