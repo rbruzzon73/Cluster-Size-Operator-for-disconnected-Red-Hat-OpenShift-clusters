@@ -78,9 +78,9 @@ oc delete csv --all -n "$NAMESPACE"
 echo "-> Cycling background OLM lifecycle engine pods..."
 oc delete pod -n openshift-operator-lifecycle-manager -l app=catalog-operator
 
-echo "-> Applying fresh production configuration stacks..."
-oc apply -f ../openshift-size-monitoring.yaml
+#echo "-> Applying fresh production configuration stacks..."
+#oc apply -f ../openshift-size-monitoring.yaml
 
-echo -e "\n🚀 Upgrade complete! Track your rollout progress with:"
-echo "oc get installplans -n $NAMESPACE"
-echo "oc get pods -n $NAMESPACE"
+#echo -e "\n🚀 Upgrade complete! Track your rollout progress with:"
+#echo "oc get installplans -n $NAMESPACE"
+#echo "oc get pods -n $NAMESPACE"
